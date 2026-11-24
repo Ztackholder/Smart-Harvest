@@ -1,0 +1,374 @@
+[
+    {
+        "id": "916b033f06e7100d",
+        "type": "tab",
+        "label": "Monitoring Lahan",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "8779dca2c3d45cb8",
+        "type": "mqtt in",
+        "z": "916b033f06e7100d",
+        "name": "MQTT Sensor Lingkungan",
+        "topic": "tani/sensor/lingkungan",
+        "qos": "0",
+        "datatype": "utf8",
+        "broker": "broker_hivemq_public",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 160,
+        "y": 180,
+        "wires": [
+            [
+                "42e44699871d37b5",
+                "89529491ba8aae2a"
+            ]
+        ]
+    },
+    {
+        "id": "42e44699871d37b5",
+        "type": "json",
+        "z": "916b033f06e7100d",
+        "name": "Parse JSON",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 390,
+        "y": 120,
+        "wires": [
+            [
+                "8e94a740932cc48a"
+            ]
+        ]
+    },
+    {
+        "id": "8e94a740932cc48a",
+        "type": "function",
+        "z": "916b033f06e7100d",
+        "name": "Pecah Data Sensor",
+        "func": "var data = msg.payload;\n\nvar msgTemp = { payload: Number(data.temp) };\nvar msgPres = { payload: Number(data.pres) };\nvar msgSoil = { payload: Number(data.soil_pct) };\n\nreturn [msgTemp, msgPres, msgSoil];",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 120,
+        "wires": [
+            [
+                "382336a0f1e3efc7",
+                "7fed65827aead630"
+            ],
+            [
+                "6bbad881b92ebc56"
+            ],
+            [
+                "fba576daac45cd87",
+                "43d8c7ad78749976"
+            ]
+        ]
+    },
+    {
+        "id": "89529491ba8aae2a",
+        "type": "change",
+        "z": "916b033f06e7100d",
+        "name": "Set Header JSON",
+        "rules": [
+            {
+                "t": "set",
+                "p": "headers",
+                "pt": "msg",
+                "to": "{\"Content-Type\":\"application/json\"}",
+                "tot": "json"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 410,
+        "y": 260,
+        "wires": [
+            [
+                "5f01dc561ecb5e4f"
+            ]
+        ]
+    },
+    {
+        "id": "5f01dc561ecb5e4f",
+        "type": "http request",
+        "z": "916b033f06e7100d",
+        "name": "Kirim ke Google Sheets",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "https://script.google.com/macros/s/AKfycbzk95dkNGnJSp-CpccUpkkr3f3gDqK61g4_1Jiqs9Sc7e765kFVrpit_225GYGuznq5/exec",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 650,
+        "y": 260,
+        "wires": [
+            [
+                "ddae9dae212e9ba7"
+            ]
+        ]
+    },
+    {
+        "id": "ddae9dae212e9ba7",
+        "type": "debug",
+        "z": "916b033f06e7100d",
+        "name": "Status Google Sheets",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload",
+        "statusType": "auto",
+        "x": 900,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "382336a0f1e3efc7",
+        "type": "ui_gauge",
+        "z": "916b033f06e7100d",
+        "name": "Suhu Udara",
+        "group": "e5e802e29102d031",
+        "order": 1,
+        "width": 4,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Suhu Udara",
+        "label": "°C",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "50",
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "28",
+        "seg2": "35",
+        "diff": false,
+        "className": "",
+        "x": 850,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "6bbad881b92ebc56",
+        "type": "ui_gauge",
+        "z": "916b033f06e7100d",
+        "name": "Tekanan Udara",
+        "group": "e5e802e29102d031",
+        "order": 2,
+        "width": 4,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Tekanan Udara",
+        "label": "hPa",
+        "format": "{{value}}",
+        "min": "900",
+        "max": "1050",
+        "colors": [
+            "#3498db",
+            "#2ecc71",
+            "#f1c40f"
+        ],
+        "seg1": "940",
+        "seg2": "1015",
+        "diff": false,
+        "className": "",
+        "x": 860,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "fba576daac45cd87",
+        "type": "ui_gauge",
+        "z": "916b033f06e7100d",
+        "name": "Kelembapan Tanah",
+        "group": "e5e802e29102d031",
+        "order": 3,
+        "width": 4,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Kelembapan Tanah",
+        "label": "%",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "100",
+        "colors": [
+            "#ca3838",
+            "#00b500",
+            "#3498db"
+        ],
+        "seg1": "30",
+        "seg2": "75",
+        "diff": false,
+        "className": "",
+        "x": 870,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "7fed65827aead630",
+        "type": "ui_chart",
+        "z": "916b033f06e7100d",
+        "name": "Grafik Suhu",
+        "group": "e5e802e29102d031",
+        "order": 4,
+        "width": 6,
+        "height": 4,
+        "label": "Tren Suhu (°C)",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "Menunggu data sensor...",
+        "dot": false,
+        "ymin": "15",
+        "ymax": "45",
+        "removeOlder": "1",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "3600",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#e67e22",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 850,
+        "y": 80,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "43d8c7ad78749976",
+        "type": "ui_chart",
+        "z": "916b033f06e7100d",
+        "name": "Grafik Kelembapan Tanah",
+        "group": "e5e802e29102d031",
+        "order": 5,
+        "width": 6,
+        "height": 4,
+        "label": "Tren Kelembapan Tanah (%)",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "Menunggu data sensor...",
+        "dot": false,
+        "ymin": "0",
+        "ymax": "100",
+        "removeOlder": "1",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "3600",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#27ae60",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 890,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "broker_hivemq_public",
+        "type": "mqtt-broker",
+        "name": "HiveMQ Public",
+        "broker": "broker.hivemq.com",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "e5e802e29102d031",
+        "type": "ui_group",
+        "name": "Monitoring Lahan",
+        "tab": "ui_tab_pertanian",
+        "order": 1,
+        "disp": true,
+        "width": "12",
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "ui_tab_pertanian",
+        "type": "ui_tab",
+        "name": "Dashboard Pertanian",
+        "icon": "dashboard",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "8b3928d62e6faf08",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6"
+        }
+    }
+]
