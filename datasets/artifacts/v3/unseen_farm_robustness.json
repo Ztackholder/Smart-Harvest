@@ -1,0 +1,21 @@
+{
+  "scope": "development_pool_only_unseen_fictional_farms",
+  "heldout_farms": [
+    "FARM-04",
+    "FARM-11",
+    "FARM-19",
+    "FARM-27"
+  ],
+  "fit_rows": 2400,
+  "evaluated_rows": 323,
+  "metrics": {
+    "rows": 323,
+    "mae_kg": 5.71593,
+    "rmse_kg": 9.41603,
+    "r2": 0.818758,
+    "bias_pred_minus_actual_kg": 0.24118,
+    "mae_kg_m2": 0.192741,
+    "rmse_kg_m2": 0.298216
+  },
+  "warning": "Synthetic known-rule transfer test; no real farm generalization established."
+}

@@ -1,0 +1,146 @@
+{
+  "complete": {
+    "air_temp_mean_7d_c": 24.84115,
+    "air_temp_max_7d_c": 25.68229,
+    "humidity_mean_7d_pct": 69.46354,
+    "soil_moisture_mean_7d_pct": 51.95833,
+    "soil_moisture_min_7d_pct": 48.0,
+    "valid_sensor_readings_7d": 672,
+    "quality": {
+      "air_temperature_c": {
+        "valid_slots": 672,
+        "expected_slots": 672,
+        "coverage": 1.0,
+        "last_seen_hours": 0.25,
+        "usable": true,
+        "mean": 24.84115,
+        "max": 25.68229,
+        "min": 24.0
+      },
+      "relative_humidity_pct": {
+        "valid_slots": 672,
+        "expected_slots": 672,
+        "coverage": 1.0,
+        "last_seen_hours": 0.25,
+        "usable": true,
+        "mean": 69.46354,
+        "max": 72.92708,
+        "min": 66.0
+      },
+      "soil_moisture_index_pct": {
+        "valid_slots": 672,
+        "expected_slots": 672,
+        "coverage": 1.0,
+        "last_seen_hours": 0.25,
+        "usable": true,
+        "mean": 51.95833,
+        "max": 55.91667,
+        "min": 48.0
+      }
+    },
+    "rejected": {
+      "invalid": 1,
+      "outside_window": 1,
+      "duplicates": 1,
+      "unsupported": 0
+    },
+    "window_start_inclusive": "2026-09-28T09:00:00+07:00",
+    "window_end_exclusive": "2026-10-05T09:00:00+07:00"
+  },
+  "missing_interval": {
+    "air_temp_mean_7d_c": null,
+    "air_temp_max_7d_c": null,
+    "humidity_mean_7d_pct": null,
+    "soil_moisture_mean_7d_pct": null,
+    "soil_moisture_min_7d_pct": null,
+    "valid_sensor_readings_7d": 135,
+    "quality": {
+      "air_temperature_c": {
+        "valid_slots": 135,
+        "expected_slots": 672,
+        "coverage": 0.20089,
+        "last_seen_hours": 0.5,
+        "usable": false,
+        "mean": null,
+        "max": null,
+        "min": null
+      },
+      "relative_humidity_pct": {
+        "valid_slots": 135,
+        "expected_slots": 672,
+        "coverage": 0.20089,
+        "last_seen_hours": 0.5,
+        "usable": false,
+        "mean": null,
+        "max": null,
+        "min": null
+      },
+      "soil_moisture_index_pct": {
+        "valid_slots": 135,
+        "expected_slots": 672,
+        "coverage": 0.20089,
+        "last_seen_hours": 0.5,
+        "usable": false,
+        "mean": null,
+        "max": null,
+        "min": null
+      }
+    },
+    "rejected": {
+      "invalid": 0,
+      "outside_window": 0,
+      "duplicates": 0,
+      "unsupported": 0
+    },
+    "window_start_inclusive": "2026-09-28T09:00:00+07:00",
+    "window_end_exclusive": "2026-10-05T09:00:00+07:00"
+  },
+  "stale": {
+    "air_temp_mean_7d_c": null,
+    "air_temp_max_7d_c": null,
+    "humidity_mean_7d_pct": null,
+    "soil_moisture_mean_7d_pct": null,
+    "soil_moisture_min_7d_pct": null,
+    "valid_sensor_readings_7d": 0,
+    "quality": {
+      "air_temperature_c": {
+        "valid_slots": 0,
+        "expected_slots": 672,
+        "coverage": 0.0,
+        "last_seen_hours": null,
+        "usable": false,
+        "mean": null,
+        "max": null,
+        "min": null
+      },
+      "relative_humidity_pct": {
+        "valid_slots": 0,
+        "expected_slots": 672,
+        "coverage": 0.0,
+        "last_seen_hours": null,
+        "usable": false,
+        "mean": null,
+        "max": null,
+        "min": null
+      },
+      "soil_moisture_index_pct": {
+        "valid_slots": 0,
+        "expected_slots": 672,
+        "coverage": 0.0,
+        "last_seen_hours": null,
+        "usable": false,
+        "mean": null,
+        "max": null,
+        "min": null
+      }
+    },
+    "rejected": {
+      "invalid": 0,
+      "outside_window": 2016,
+      "duplicates": 0,
+      "unsupported": 0
+    },
+    "window_start_inclusive": "2026-09-28T09:00:00+07:00",
+    "window_end_exclusive": "2026-10-05T09:00:00+07:00"
+  }
+}

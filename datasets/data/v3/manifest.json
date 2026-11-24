@@ -1,0 +1,169 @@
+{
+  "dataset_version": "3.0.0",
+  "status": "100% SYNTHETIC",
+  "seed": 20261124,
+  "profile": "default",
+  "config_sha256": "57d8c485771e425e81de501b1b18456324154c6379dc286b8433954b0f4dba73",
+  "core_columns": [
+    "farm_id",
+    "plot_id",
+    "planting_id",
+    "crop_id",
+    "planting_date",
+    "prediction_at",
+    "target_harvest_date",
+    "target_period",
+    "planted_area_m2",
+    "crop_age_days",
+    "days_until_target_harvest",
+    "air_temp_mean_7d_c",
+    "air_temp_max_7d_c",
+    "humidity_mean_7d_pct",
+    "soil_moisture_mean_7d_pct",
+    "soil_moisture_min_7d_pct",
+    "plant_count",
+    "estimated_quantity_kg",
+    "actual_harvest_kg",
+    "soil_condition",
+    "valid_sensor_readings_7d"
+  ],
+  "counts": {
+    "train_rows": 3700,
+    "validation_rows": 800,
+    "test_rows": 752
+  },
+  "training_pool_rows": 4500,
+  "split_dates": {
+    "train": {
+      "prediction_start": "2023-01-19T09:00:00+07:00",
+      "prediction_end": "2025-02-16T09:00:00+07:00",
+      "latest_label_available_on": "2025-02-19"
+    },
+    "validation": {
+      "prediction_start": "2025-05-03T09:00:00+07:00",
+      "prediction_end": "2025-10-23T09:00:00+07:00",
+      "latest_label_available_on": "2025-10-30"
+    },
+    "test": {
+      "prediction_start": "2026-01-14T09:00:00+07:00",
+      "prediction_end": "2026-07-09T09:00:00+07:00",
+      "latest_label_available_on": "2026-07-10"
+    }
+  },
+  "scenario_counts": {
+    "train": {
+      "device_offline": 437,
+      "soil_missing": 360,
+      "complete_iot": 2231,
+      "air_partial": 198,
+      "manual_only": 205,
+      "weather_api_only": 269
+    },
+    "validation": {
+      "complete_iot": 492,
+      "weather_api_only": 71,
+      "device_offline": 74,
+      "soil_missing": 83,
+      "manual_only": 41,
+      "air_partial": 39
+    },
+    "test": {
+      "complete_iot": 457,
+      "device_offline": 82,
+      "manual_only": 54,
+      "soil_missing": 76,
+      "weather_api_only": 48,
+      "air_partial": 35
+    }
+  },
+  "stress_counts": {
+    "train": {
+      "no_event": 3302,
+      "pest_disease_loss": 170,
+      "delayed_harvest": 102,
+      "partial_harvest": 126
+    },
+    "validation": {
+      "no_event": 710,
+      "pest_disease_loss": 46,
+      "partial_harvest": 26,
+      "delayed_harvest": 18
+    },
+    "test": {
+      "no_event": 684,
+      "delayed_harvest": 14,
+      "pest_disease_loss": 30,
+      "partial_harvest": 24
+    }
+  },
+  "target_semantics": "Kilograms physically harvested in the planned target ISO week for one planting; zero if all harvest is delayed to a later week. Partial harvest is counted only in the planned week. Outcome events are stored separately.",
+  "files": {
+    "crop_parameters.csv": {
+      "sha256": "d3954d9f9fe882eece42be83fbf06168e5360e4c60b05b5abfc2b75e90ec9c8f",
+      "bytes": 747
+    },
+    "harvest_events.csv": {
+      "sha256": "df059a32cfc026b100b58eb5a17ea69a56356e3a66e0183e22061b15386c709b",
+      "bytes": 558238
+    },
+    "sensitivity.csv": {
+      "sha256": "9b915977473b2f2c257f8371ec54f8802b9e288f294f62f4b0fc33b54a003214",
+      "bytes": 7191
+    },
+    "test_ground_truth.csv": {
+      "sha256": "398ef6855b9bf971af3e8e56526782dffee5c37c9adafce05e71d7c6faf43179",
+      "bytes": 72012
+    },
+    "test_inputs.csv": {
+      "sha256": "71dbd43831d5b66c487367e90aa6196414246242d880ed494dfad7d5116da4a1",
+      "bytes": 118626
+    },
+    "test_metadata.csv": {
+      "sha256": "d0a3c26924caa64b294bd411c20271cf8fc1f5a63d3625a09519e5b2f772d625",
+      "bytes": 84357
+    },
+    "test_provenance.csv": {
+      "sha256": "d48eb76a28f413458944f32f3307035b50016c9c0ab2162a94ed5d462294fdc9",
+      "bytes": 78114
+    },
+    "test_weekly_demand.csv": {
+      "sha256": "6d1efcf67a349ab8a71230d75f65ea153e5d31280c43f248f1ffeeb087876387",
+      "bytes": 5525
+    },
+    "train.csv": {
+      "sha256": "eab2758b4bed62d71a19cf38197b6d833aee23dd3cb4eeca217a487be4a4f01f",
+      "bytes": 603456
+    },
+    "train_metadata.csv": {
+      "sha256": "57441f1ad98de0cb8290e69816a1c5bf3cc1b731c1df1001cb9b287e67ea2841",
+      "bytes": 414367
+    },
+    "train_provenance.csv": {
+      "sha256": "aaa0c37955e843d48965413e598187fe12c170e1326cc63a2d52f1a713c4129a",
+      "bytes": 384348
+    },
+    "training_pool_4500.csv": {
+      "sha256": "bcd616e0a1264376cfffbac81a0ae2f9f18f3e982940aeb938b8669b51bb95c3",
+      "bytes": 733742
+    },
+    "validation.csv": {
+      "sha256": "980ef880ba4e440d049ce34c51b7ff1e471c64a149245e105de2c76766d5a965",
+      "bytes": 130642
+    },
+    "validation_metadata.csv": {
+      "sha256": "5bc55a266fe279870306fc0ac49fdfb720f37990f9aa819a10981b95048077c6",
+      "bytes": 90386
+    },
+    "validation_provenance.csv": {
+      "sha256": "691910932a2c1761cbf5320db2b69559d818c8e932684f095cd1037170abdac1",
+      "bytes": 83244
+    }
+  },
+  "exclusions_from_core": [
+    "data_origin",
+    "sensor_source",
+    "split"
+  ],
+  "documentation_status": "simulation; coefficients uncalibrated",
+  "source_of_truth": "Laporan_Kelompok 09_Deliverable 2 II3120.pdf section 3.4.3"
+}

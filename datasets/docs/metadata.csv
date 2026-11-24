@@ -1,0 +1,12 @@
+property,value,notes
+version,3.0.0,
+is_synthetic,True,
+generated_seed,20261124,
+core_columns,21,
+target,actual_harvest_kg,
+target_semantics,Kilograms physically harvested in the planned target ISO week for one planting; zero if all harvest is delayed to a later week. Partial harvest is counted only in the planned week. Outcome events are stored separately.,
+data_counts,"{""train_rows"": 3700, ""validation_rows"": 800, ""test_rows"": 752}",
+development_pool_rows,4500,
+crop_codes,"[""AMARANTH"", ""KANGKUNG"", ""LETTUCE"", ""PAKCHOY"", ""MUSTARD_GREENS"", ""SPINACH"", ""KALE""]",
+config_sha256,57d8c485771e425e81de501b1b18456324154c6379dc286b8433954b0f4dba73,
+source_of_truth,Laporan_Kelompok 09_Deliverable 2 II3120.pdf section 3.4.3,

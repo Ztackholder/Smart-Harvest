@@ -1,0 +1,36 @@
+dataset,column,dtype,unit_or_range,nullable,model_role,prediction_time_available,source,notes
+core_21_columns,farm_id,string,,False,identifier,True,fictional farm registry,farm_id; join/auth only
+core_21_columns,plot_id,string,,False,identifier,True,fictional plot registry,plot_id; join/auth only
+core_21_columns,planting_id,string,,False,identifier,True,fictional planting registry,unique forecast/harvest linkage; omit from ML
+core_21_columns,crop_id,category,7 supported crop codes,False,model_feature,True,cultivation records,"categorical predictive feature, no numerical ranking"
+core_21_columns,planting_date,date,YYYY-MM-DD,False,input_metadata,True,cultivation records,known when forecasting; used to derive age
+core_21_columns,prediction_at,datetime,RFC3339 Asia/Jakarta,False,input_metadata,True,forecast request,"as-of timestamp, feature cutoff exclusive"
+core_21_columns,target_harvest_date,date,YYYY-MM-DD,False,input_metadata,True,planned farm schedule,PLANNED target date known at prediction; outcome date is separate
+core_21_columns,target_period,ISO-week,YYYY-Www,False,input_metadata,True,target_harvest_date,planned harvest ISO week; CSA period
+core_21_columns,planted_area_m2,number,m2 (>0),False,required_service_input,True,farm form,convert kg/m2 prediction to total kg; train raw model candidate
+core_21_columns,crop_age_days,integer,days (>=0),False,model_feature,True,prediction_at minus planting_date,growth stage at forecast time
+core_21_columns,days_until_target_harvest,integer,days (>=1),False,model_feature,True,planned date minus prediction_at,"forecast horizon, not future outcome"
+core_21_columns,air_temp_mean_7d_c,number,"°C [-15,60]",True,optional_model_feature,True,BME280 simulated / weather API simulated,"mean within [prediction_at-7d,prediction_at)"
+core_21_columns,air_temp_max_7d_c,number,"°C [-15,60]",True,optional_model_feature,True,BME280 simulated / weather API simulated,"maximum in same window, >= mean"
+core_21_columns,humidity_mean_7d_pct,number,"%RH [0,100]",True,optional_model_feature,True,BME280 simulated / weather API simulated,"relative humidity, time aligned"
+core_21_columns,soil_moisture_mean_7d_pct,number,"relative index [0,100]",True,optional_model_feature,True,simulated calibrated capacitive probe,RELATIVE wetness index; not soil volumetric content
+core_21_columns,soil_moisture_min_7d_pct,number,"relative index [0,100]",True,optional_model_feature,True,simulated calibrated capacitive probe,"minimum wetness index, <= mean"
+core_21_columns,plant_count,integer,plants (>0),False,required_service_input,True,cultivation records,derive plants per m2 density; raw candidate only
+core_21_columns,estimated_quantity_kg,number,kg (>=0),False,baseline_only,True,fictional farmer estimate,exclude model features; compare to AI forecast
+core_21_columns,actual_harvest_kg,number,kg (>=0),False,target_only,False,synthetic harvest event reconciliation,PHYSICAL mass harvested within PLANNED ISO week; can be zero
+core_21_columns,soil_condition,category,dry/adequate/wet/saturated/unavailable,False,display_metadata,True,derived soil mean index,derived from moisture; omit ML
+core_21_columns,valid_sensor_readings_7d,integer,0..672 synthetic slots,False,quality_metadata,True,simulated observation coverage,count of paired valid air temp/RH slots; source-specific breakdown in sidecar
+sidecar_or_derived,plant_density_per_m2,number,plants/m2,depends,derived_feature,True,plant_count/planted_area_m2,calculate in model preprocessing; omit from main CSV
+sidecar_or_derived,yield_kg_m2,number,kg/m2,depends,derived_target,False,actual_harvest_kg/planted_area_m2,training-only; never inference input
+sidecar_or_derived,scenario,category,,depends,scenario_metadata,True,simulated availability mechanism,"complete_iot, soil_missing, weather_api_only, air_partial, manual_only, device_offline"
+sidecar_or_derived,air_source,category,,depends,provenance,True,simulated_iot/weather_api/none,always simulated
+sidecar_or_derived,soil_source,category,,depends,provenance,True,simulated_iot/none,always simulated
+sidecar_or_derived,temperature_valid_slots,integer,0..672,depends,quality_metadata,True,simulated 15-min coverage,synthetic slot count
+sidecar_or_derived,humidity_valid_slots,integer,0..672,depends,quality_metadata,True,simulated 15-min coverage,synthetic slot count
+sidecar_or_derived,soil_valid_slots,integer,0..672,depends,quality_metadata,True,simulated 15-min coverage,synthetic slot count
+sidecar_or_derived,air_last_seen_hours,number,hours,depends,quality_metadata,True,simulated freshness,blank when source missing
+sidecar_or_derived,soil_last_seen_hours,number,hours,depends,quality_metadata,True,simulated freshness,blank when source missing
+sidecar_or_derived,actual_harvest_date,date,YYYY-MM-DD,depends,outcome_only,False,synthetic harvest events,"latest actual event date, never input"
+sidecar_or_derived,harvested_at,date,YYYY-MM-DD,depends,outcome_only,False,synthetic harvest events,"event time, may occur following week"
+sidecar_or_derived,quantity_kg,number,kg,depends,outcome_only,False,synthetic event ledger,"harvest event mass, sum in planned week matches target"
+sidecar_or_derived,planned_demand_kg,number,kg,depends,business_fixture,True,simulated coordinator demand,"used by SVC-04 shortage risk, never yield model"

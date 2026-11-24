@@ -1,0 +1,143 @@
+{
+  "name": "SmartHarvest Research-Informed Synthetic Dataset v3",
+  "version": "3.0.0",
+  "is_synthetic": true,
+  "is_field_validated": false,
+  "generated_seed": 20261124,
+  "core_columns": 21,
+  "target": "actual_harvest_kg",
+  "target_semantics": "Kilograms physically harvested in the planned target ISO week for one planting; zero if all harvest is delayed to a later week. Partial harvest is counted only in the planned week. Outcome events are stored separately.",
+  "normalized_target": "yield_kg_m2 (derived in training code)",
+  "data_counts": {
+    "train_rows": 3700,
+    "validation_rows": 800,
+    "test_rows": 752
+  },
+  "development_pool_rows": 4500,
+  "crop_codes": [
+    "AMARANTH",
+    "KANGKUNG",
+    "LETTUCE",
+    "PAKCHOY",
+    "MUSTARD_GREENS",
+    "SPINACH",
+    "KALE"
+  ],
+  "splits": {
+    "train": {
+      "prediction_start": "2023-01-19T09:00:00+07:00",
+      "prediction_end": "2025-02-16T09:00:00+07:00",
+      "latest_label_available_on": "2025-02-19"
+    },
+    "validation": {
+      "prediction_start": "2025-05-03T09:00:00+07:00",
+      "prediction_end": "2025-10-23T09:00:00+07:00",
+      "latest_label_available_on": "2025-10-30"
+    },
+    "test": {
+      "prediction_start": "2026-01-14T09:00:00+07:00",
+      "prediction_end": "2026-07-09T09:00:00+07:00",
+      "latest_label_available_on": "2026-07-10"
+    }
+  },
+  "scenarios": {
+    "train": {
+      "device_offline": 437,
+      "soil_missing": 360,
+      "complete_iot": 2231,
+      "air_partial": 198,
+      "manual_only": 205,
+      "weather_api_only": 269
+    },
+    "validation": {
+      "complete_iot": 492,
+      "weather_api_only": 71,
+      "device_offline": 74,
+      "soil_missing": 83,
+      "manual_only": 41,
+      "air_partial": 39
+    },
+    "test": {
+      "complete_iot": 457,
+      "device_offline": 82,
+      "manual_only": 54,
+      "soil_missing": 76,
+      "weather_api_only": 48,
+      "air_partial": 35
+    }
+  },
+  "config_sha256": "57d8c485771e425e81de501b1b18456324154c6379dc286b8433954b0f4dba73",
+  "feature_contract_json": "artifacts/v3/feature_contract.json",
+  "file_manifest_json": "data/v3/manifest.json",
+  "train_results": {
+    "selected_on": "validation only",
+    "selected": {
+      "model": "rf",
+      "target": "normalized",
+      "scope": "full_iot",
+      "rows": 492,
+      "mae_kg": 5.63846,
+      "rmse_kg": 9.10636,
+      "r2": 0.800767,
+      "bias_pred_minus_actual_kg": -0.43724,
+      "mae_kg_m2": 0.180597,
+      "rmse_kg_m2": 0.262644
+    },
+    "held_out_synthetic_test": {
+      "rows": 752,
+      "mae_kg": 6.31031,
+      "rmse_kg": 10.07369,
+      "r2": 0.773288,
+      "bias_pred_minus_actual_kg": -0.80742,
+      "mae_kg_m2": 0.20198,
+      "rmse_kg_m2": 0.297215
+    },
+    "weekly_shortage": {
+      "groups": 90,
+      "true_positives": 69,
+      "false_negatives": 7,
+      "false_positives": 8,
+      "precision": 0.8961,
+      "recall": 0.9079,
+      "shortage_quantity_mae_kg": 19.454
+    }
+  },
+  "source_of_truth": "Laporan_Kelompok 09_Deliverable 2 II3120.pdf section 3.4.3",
+  "recommendations_source": "SmartHarvest_Dataset_v3_Revision_Recommendations.md",
+  "reference_notes": "source_audit_v2.csv documents evidence limits; v3 coefficients were not fitted to external raw field data",
+  "model_inputs": {
+    "full": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "air_temp_mean_7d_c",
+      "air_temp_max_7d_c",
+      "humidity_mean_7d_pct",
+      "soil_moisture_mean_7d_pct",
+      "soil_moisture_min_7d_pct",
+      "plant_density_per_m2"
+    ],
+    "air": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "air_temp_mean_7d_c",
+      "air_temp_max_7d_c",
+      "humidity_mean_7d_pct",
+      "plant_density_per_m2"
+    ],
+    "manual": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "plant_density_per_m2"
+    ]
+  },
+  "warnings": [
+    "Synthetic outcomes are demonstrative, including test ground truth.",
+    "All numeric agricultural coefficients remain hypothetical.",
+    "Humidity and moisture readings in core CSVs are simulated.",
+    "The sensor fixture models 7-day windows but does not represent deployed hardware.",
+    "Model R² is a variance-explained metric, not percentage accuracy."
+  ]
+}

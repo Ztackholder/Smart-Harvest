@@ -1,0 +1,23 @@
+{
+  "farm_id": "SYN-FIX-FARM",
+  "device_id": "SYN-ESP32-01",
+  "observed_at": "2026-10-05T08:45:00+07:00",
+  "source": "simulated_iot",
+  "measurements": [
+    {
+      "type": "air_temperature",
+      "value": 25.4,
+      "unit": "C"
+    },
+    {
+      "type": "relative_humidity",
+      "value": 70.0,
+      "unit": "percent"
+    },
+    {
+      "type": "soil_moisture_index",
+      "value": 53.0,
+      "unit": "percent"
+    }
+  ]
+}

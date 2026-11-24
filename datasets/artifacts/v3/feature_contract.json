@@ -1,0 +1,46 @@
+{
+  "features": {
+    "full": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "air_temp_mean_7d_c",
+      "air_temp_max_7d_c",
+      "humidity_mean_7d_pct",
+      "soil_moisture_mean_7d_pct",
+      "soil_moisture_min_7d_pct",
+      "plant_density_per_m2"
+    ],
+    "air": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "air_temp_mean_7d_c",
+      "air_temp_max_7d_c",
+      "humidity_mean_7d_pct",
+      "plant_density_per_m2"
+    ],
+    "manual": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "plant_density_per_m2"
+    ]
+  },
+  "required_service_inputs": [
+    "crop_id",
+    "planting_date",
+    "prediction_at",
+    "target_harvest_date",
+    "planted_area_m2",
+    "plant_count"
+  ],
+  "prediction_output": "predicted_quantity_kg",
+  "target_never_sent_to_inference": true,
+  "conditional_routing": [
+    "full",
+    "air",
+    "manual",
+    "unavailable"
+  ]
+}

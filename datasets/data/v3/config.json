@@ -1,0 +1,178 @@
+{
+  "dataset_version": "3.0.0",
+  "simulation_status": "100% synthetic; all numerical crop coefficients uncalibrated",
+  "default_seed": 20261124,
+  "n_train": 3700,
+  "n_validation": 800,
+  "n_test": 752,
+  "site": {
+    "farms": 32,
+    "plots_per_farm": 10,
+    "cycle_spacing_days": 64,
+    "start_date": "2023-01-07",
+    "train_cycles": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "validation_cycles": [
+      13,
+      14,
+      15
+    ],
+    "test_cycles": [
+      17,
+      18,
+      19
+    ],
+    "timezone": "Asia/Jakarta"
+  },
+  "scenarios": {
+    "complete_iot": 0.63,
+    "soil_missing": 0.11,
+    "weather_api_only": 0.08,
+    "air_partial": 0.05,
+    "manual_only": 0.06,
+    "device_offline": 0.07
+  },
+  "scenario_outage_farm_cycle_probability": 0.055,
+  "environment": {
+    "sampling_minutes": 15,
+    "window_days": 7,
+    "expected_slots": 672,
+    "minimum_coverage": 0.8,
+    "max_staleness_hours": 24,
+    "weather_air_bias_c": 0.6,
+    "weather_rh_bias_pct": 4.0,
+    "temp_sensor_noise_sd_c": 0.35,
+    "humidity_sensor_noise_sd_pct": 1.8,
+    "soil_sensor_noise_sd_pct": 3.2
+  },
+  "stress": {
+    "no_event": 0.895,
+    "pest_disease_loss": 0.045,
+    "partial_harvest": 0.035,
+    "delayed_harvest": 0.025,
+    "pest_loss_factor_range": [
+      0.64,
+      0.87
+    ],
+    "partial_fraction_range": [
+      0.35,
+      0.75
+    ],
+    "delay_days_range": [
+      8,
+      11
+    ]
+  },
+  "growth": {
+    "temperature_heat_penalty_per_c": 0.033,
+    "temperature_cold_penalty_per_c": 0.023,
+    "heat_extreme_penalty_per_c": 0.014,
+    "vpd_excess_penalty_per_kpa": 0.072,
+    "vpd_start_kpa": 1.3,
+    "humidity_excess_start_pct": 88,
+    "humidity_excess_penalty_per_pct": 0.0026,
+    "dry_threshold_index": 43,
+    "waterlogged_threshold_index": 81,
+    "drought_span_index": 33,
+    "saturation_span_index": 16,
+    "min_dry_threshold_index": 29,
+    "min_dry_span_index": 22,
+    "minimum_dry_penalty": 0.095,
+    "reference_age_fraction": 0.59,
+    "density_exponent": 0.42,
+    "crowding_threshold": 1.22,
+    "crowding_penalty_per_ratio": 0.14
+  },
+  "farmer_baseline": {
+    "forecast_noise_sd": 0.11,
+    "environment_adjust_weight": 0.3,
+    "density_adjust_weight": 0.25
+  },
+  "harvest_target_semantics": "Kilograms physically harvested in the planned target ISO week for one planting; zero if all harvest is delayed to a later week. Partial harvest is counted only in the planned week. Outcome events are stored separately.",
+  "source_of_truth": "Laporan_Kelompok 09_Deliverable 2 II3120.pdf section 3.4.3",
+  "crop_code_warning": "SPINACH=Spinacia oleracea, AMARANTH=Amaranthus genus (local bayam): not equivalent species",
+  "crops": {
+    "AMARANTH": {
+      "reference_yield_kg_m2": 1.35,
+      "temp_optimum_c": 27.0,
+      "comfortable_band_c": 2.5,
+      "reference_maturity_days": 30,
+      "reference_density_m2": 14.0,
+      "drought_penalty_max": 0.36,
+      "waterlogging_penalty_max": 0.22,
+      "gompertz_k": 0.16
+    },
+    "KANGKUNG": {
+      "reference_yield_kg_m2": 1.5,
+      "temp_optimum_c": 28.0,
+      "comfortable_band_c": 3.0,
+      "reference_maturity_days": 29,
+      "reference_density_m2": 16.0,
+      "drought_penalty_max": 0.31,
+      "waterlogging_penalty_max": 0.22,
+      "gompertz_k": 0.16
+    },
+    "LETTUCE": {
+      "reference_yield_kg_m2": 1.65,
+      "temp_optimum_c": 22.0,
+      "comfortable_band_c": 2.5,
+      "reference_maturity_days": 39,
+      "reference_density_m2": 8.0,
+      "drought_penalty_max": 0.44,
+      "waterlogging_penalty_max": 0.27,
+      "gompertz_k": 0.13
+    },
+    "PAKCHOY": {
+      "reference_yield_kg_m2": 1.85,
+      "temp_optimum_c": 24.0,
+      "comfortable_band_c": 2.5,
+      "reference_maturity_days": 35,
+      "reference_density_m2": 9.0,
+      "drought_penalty_max": 0.39,
+      "waterlogging_penalty_max": 0.24,
+      "gompertz_k": 0.14
+    },
+    "MUSTARD_GREENS": {
+      "reference_yield_kg_m2": 1.55,
+      "temp_optimum_c": 25.0,
+      "comfortable_band_c": 2.5,
+      "reference_maturity_days": 34,
+      "reference_density_m2": 12.0,
+      "drought_penalty_max": 0.37,
+      "waterlogging_penalty_max": 0.24,
+      "gompertz_k": 0.14
+    },
+    "SPINACH": {
+      "reference_yield_kg_m2": 1.2,
+      "temp_optimum_c": 21.0,
+      "comfortable_band_c": 3.0,
+      "reference_maturity_days": 34,
+      "reference_density_m2": 10.0,
+      "drought_penalty_max": 0.43,
+      "waterlogging_penalty_max": 0.24,
+      "gompertz_k": 0.14
+    },
+    "KALE": {
+      "reference_yield_kg_m2": 1.45,
+      "temp_optimum_c": 21.0,
+      "comfortable_band_c": 3.5,
+      "reference_maturity_days": 47,
+      "reference_density_m2": 6.0,
+      "drought_penalty_max": 0.34,
+      "waterlogging_penalty_max": 0.25,
+      "gompertz_k": 0.105
+    }
+  }
+}

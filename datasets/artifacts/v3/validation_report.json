@@ -1,0 +1,190 @@
+{
+  "synthetic_only": true,
+  "selection_used_test_labels": false,
+  "selection_split": "validation",
+  "refit_after_selection": "train_and_validation_development_pool_4500",
+  "selection": {
+    "model": "rf",
+    "target": "normalized",
+    "scope": "full_iot",
+    "rows": 492,
+    "mae_kg": 5.63846,
+    "rmse_kg": 9.10636,
+    "r2": 0.800767,
+    "bias_pred_minus_actual_kg": -0.43724,
+    "mae_kg_m2": 0.180597,
+    "rmse_kg_m2": 0.262644
+  },
+  "experiments": [
+    {
+      "model": "rf",
+      "target": "normalized",
+      "scope": "full_iot",
+      "rows": 492,
+      "mae_kg": 5.63846,
+      "rmse_kg": 9.10636,
+      "r2": 0.800767,
+      "bias_pred_minus_actual_kg": -0.43724,
+      "mae_kg_m2": 0.180597,
+      "rmse_kg_m2": 0.262644
+    },
+    {
+      "model": "tree",
+      "target": "normalized",
+      "scope": "full_iot",
+      "rows": 492,
+      "mae_kg": 6.8289,
+      "rmse_kg": 10.41794,
+      "r2": 0.739243,
+      "bias_pred_minus_actual_kg": -0.22172,
+      "mae_kg_m2": 0.222154,
+      "rmse_kg_m2": 0.304316
+    },
+    {
+      "model": "ridge",
+      "target": "normalized",
+      "scope": "full_iot",
+      "rows": 492,
+      "mae_kg": 6.31329,
+      "rmse_kg": 9.70252,
+      "r2": 0.773827,
+      "bias_pred_minus_actual_kg": 0.46218,
+      "mae_kg_m2": 0.204013,
+      "rmse_kg_m2": 0.280905
+    },
+    {
+      "model": "rf",
+      "target": "raw",
+      "scope": "full_iot",
+      "rows": 492,
+      "mae_kg": 6.2805,
+      "rmse_kg": 9.58786,
+      "r2": 0.779141,
+      "bias_pred_minus_actual_kg": 0.19838,
+      "mae_kg_m2": 0.204447,
+      "rmse_kg_m2": 0.281709
+    },
+    {
+      "model": "tree",
+      "target": "raw",
+      "scope": "full_iot",
+      "rows": 492,
+      "mae_kg": 8.16314,
+      "rmse_kg": 11.64037,
+      "r2": 0.674459,
+      "bias_pred_minus_actual_kg": 0.1925,
+      "mae_kg_m2": 0.266841,
+      "rmse_kg_m2": 0.348545
+    },
+    {
+      "model": "ridge",
+      "target": "raw",
+      "scope": "full_iot",
+      "rows": 492,
+      "mae_kg": 7.17506,
+      "rmse_kg": 10.41218,
+      "r2": 0.739531,
+      "bias_pred_minus_actual_kg": 0.53415,
+      "mae_kg_m2": 0.255497,
+      "rmse_kg_m2": 0.357916
+    },
+    {
+      "model": "rf",
+      "target": "normalized",
+      "scope": "sensor_free",
+      "rows": 800,
+      "mae_kg": 7.96481,
+      "rmse_kg": 11.846,
+      "r2": 0.67572,
+      "bias_pred_minus_actual_kg": 1.51342,
+      "mae_kg_m2": 0.254916,
+      "rmse_kg_m2": 0.344036
+    },
+    {
+      "model": "rf",
+      "target": "normalized",
+      "scope": "air_only",
+      "rows": 646,
+      "mae_kg": 6.84525,
+      "rmse_kg": 10.13236,
+      "r2": 0.762487,
+      "bias_pred_minus_actual_kg": -0.10376,
+      "mae_kg_m2": 0.219377,
+      "rmse_kg_m2": 0.299747
+    }
+  ],
+  "baselines": {
+    "farmer_estimate": {
+      "rows": 800,
+      "mae_kg": 11.26255,
+      "rmse_kg": 16.42788,
+      "r2": 0.37635,
+      "bias_pred_minus_actual_kg": 9.88155,
+      "mae_kg_m2": 0.356819,
+      "rmse_kg_m2": 0.469734
+    },
+    "crop_average_yield_per_m2": {
+      "rows": 800,
+      "mae_kg": 8.54138,
+      "rmse_kg": 12.17537,
+      "r2": 0.657436,
+      "bias_pred_minus_actual_kg": 1.54768,
+      "mae_kg_m2": 0.271729,
+      "rmse_kg_m2": 0.35388
+    },
+    "global_mean": {
+      "rows": 800,
+      "mae_kg": 16.89744,
+      "rmse_kg": 20.84057,
+      "r2": -0.003684,
+      "bias_pred_minus_actual_kg": 1.2626,
+      "mae_kg_m2": 0.77689,
+      "rmse_kg_m2": 1.184631
+    }
+  },
+  "post_refit_val_diagnostic": {
+    "rows": 800,
+    "mae_kg": 2.95362,
+    "rmse_kg": 5.01184,
+    "r2": 0.941954,
+    "bias_pred_minus_actual_kg": 0.03573,
+    "mae_kg_m2": 0.09456,
+    "rmse_kg_m2": 0.143895
+  },
+  "route_counts": {
+    "full": 492,
+    "air": 154,
+    "manual": 154
+  },
+  "final_model_target": "normalized",
+  "model_version": "rf-demo-v3-research-synthetic",
+  "allowlists": {
+    "full": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "air_temp_mean_7d_c",
+      "air_temp_max_7d_c",
+      "humidity_mean_7d_pct",
+      "soil_moisture_mean_7d_pct",
+      "soil_moisture_min_7d_pct",
+      "plant_density_per_m2"
+    ],
+    "air": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "air_temp_mean_7d_c",
+      "air_temp_max_7d_c",
+      "humidity_mean_7d_pct",
+      "plant_density_per_m2"
+    ],
+    "manual": [
+      "crop_id",
+      "crop_age_days",
+      "days_until_target_harvest",
+      "plant_density_per_m2"
+    ]
+  },
+  "note": "Post-refit validation metrics reuse refit records and cannot be considered a fresh generalization test."
+}
