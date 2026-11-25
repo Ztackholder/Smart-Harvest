@@ -1,0 +1,3 @@
+farm_id,crop_id,observed_at,type,value,unit
+FARM-01,SPINACH,2026-11-11T08:00:00+07:00,air_temperature,25.4,C
+FARM-01,SPINACH,2026-11-11T08:00:00+07:00,relative_humidity,70,percent
