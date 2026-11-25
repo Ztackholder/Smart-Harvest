@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "native": "swift -module-cache-path ${TMPDIR:-/tmp}/smartharvest-swift-modules native/SmartHarvest.swift"
+    "native": "node native/launch.mjs"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

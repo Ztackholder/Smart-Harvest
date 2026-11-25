@@ -46,15 +46,17 @@ Kontrak D2 membaca prediksi melalui ID dan belum menyediakan endpoint daftar obs
 
 Frontend memakai palet merek dan skala spacing Figma. Hijau grafik diturunkan dari warna merek. Merah merek menandai kekurangan pasokan dan kesalahan. Baskervville dipakai pada judul halaman dan angka prediksi utama. Figtree dipakai pada kontrol, label, dan angka yang dibandingkan di grafik. Kedua font disertakan lewat Fontsource.
 
-Untuk melihat SF Symbols asli di macOS 13.3+, jalankan Vite di terminal pertama dan ini di terminal kedua dari `frontend/`.
+Untuk melihat SF Symbols asli di macOS 13.3+, jalankan perintah ini dari `frontend/` setelah `npm ci`. Swift tersedia melalui Xcode atau Command Line Tools.
 
 ```sh
 npm run native
 ```
 
+Perintah ini menjalankan Vite dan membuka jendela SmartHarvest. Vite yang dimulai oleh perintah ini berhenti saat jendela ditutup.
+
 Host macOS merender SF Symbols asli melalui AppKit. Browser dan host yang tidak dapat memuat simbol tertentu memakai ikon Lucide yang setara. Ikon Lucide disertakan langsung di build sebagai SVG. Lisensinya tercantum di `dist/third-party-licenses.md`.
 
-Jika port Vite berubah, jalankan dengan `SMARTHARVEST_URL=http://127.0.0.1:PORT npm run native`.
+Untuk memakai server Vite yang sudah berjalan di alamat tertentu, jalankan `SMARTHARVEST_URL=http://127.0.0.1:5173 npm run native`. Sesuaikan port dengan alamat di terminal Vite.
 
 ## Alur simulasi
 

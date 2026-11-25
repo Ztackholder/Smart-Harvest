@@ -59,7 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self
         web.uiDelegate = self
-        web.load(URLRequest(url: url))
 
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 840),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -71,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
         self.window = window
+        web.load(URLRequest(url: url, timeoutInterval: 15))
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
@@ -82,6 +82,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             return
         }
         decisionHandler(action.shouldPerformDownload ? .download : .allow)
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
+                 decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+        if response.isForMainFrame, let http = response.response as? HTTPURLResponse, http.statusCode >= 400 {
+            decisionHandler(.cancel)
+            showLoadError(webView, detail: "Vite mengembalikan HTTP \(http.statusCode).")
+            return
+        }
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        handleNavigationError(webView, error: error)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        handleNavigationError(webView, error: error)
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        showLoadError(webView, detail: "Proses WebKit berhenti.")
+    }
+
+    private func handleNavigationError(_ webView: WKWebView, error: Error) {
+        let failure = error as NSError
+        if failure.domain == NSURLErrorDomain && failure.code == NSURLErrorCancelled { return }
+        showLoadError(webView, detail: error.localizedDescription)
+    }
+
+    private func showLoadError(_ webView: WKWebView, detail: String) {
+        guard let window, window.attachedSheet == nil else { return }
+        let message = "\(detail) Periksa apakah Vite berjalan di \(url.absoluteString)."
+        fputs("SmartHarvest: \(message)\n", stderr)
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "SmartHarvest gagal dimuat"
+        alert.informativeText = message
+        alert.addButton(withTitle: "Coba lagi")
+        alert.addButton(withTitle: "Tutup")
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn {
+                webView.load(URLRequest(url: self.url, timeoutInterval: 15))
+            } else {
+                window.close()
+            }
+        }
     }
 
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
