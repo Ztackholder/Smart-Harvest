@@ -6,16 +6,18 @@ function doPost(e) {
     var timestamp = new Date();
     var temp      = Number(data.temp);
     var pres      = Number(data.pres);
+    var hum       = Number(data.hum);
     var soilPct   = Number(data.soil_pct);
     var soilRaw   = Number(data.soil_raw);
 
     var nextRow = sheet.getLastRow() + 1;
-    var statusFormula = '=IF(D' + nextRow + '<30,"Kering",IF(D' + nextRow + '<=75,"Optimal","Terlalu Basah"))';
+    var statusFormula = '=IF(E' + nextRow + '<30,"Kering",IF(E' + nextRow + '<=75,"Optimal","Terlalu Basah"))';
 
     sheet.appendRow([
       timestamp,
       temp,
       pres,
+      hum,
       soilPct,
       soilRaw,
       statusFormula

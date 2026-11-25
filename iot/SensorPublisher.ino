@@ -3,9 +3,8 @@
 #include <PubSubClient.h>
 #include <BluetoothSerial.h>
 #include <Wire.h>
-#include <Adafruit_BMP280.h>
-
-const char* id_blok = "BLOK-A1";
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
 
 // Kalibrasi Capacitive Soil Moisture Sensor
 const int NILAI_KERING = 3300; 
@@ -29,7 +28,7 @@ WiFiMulti wifiMulti;
 WiFiClient espClient;
 PubSubClient client(espClient);
 BluetoothSerial SerialBT;
-Adafruit_BMP280 bmp;
+Adafruit_BME280 bme;
 
 unsigned long waktuTerakhirKirim = 0;
 
@@ -75,16 +74,17 @@ void setup() {
   analogReadResolution(12);
 
   Wire.begin(I2C_SDA, I2C_SCL);
-  if (!bmp.begin(0x76) && !bmp.begin(0x77)) {
-    logData("ERROR: BMP280 tidak terdeteksi! Cek wiring SDA(21)/SCL(22).");
+  if (!bme.begin(0x76) && !bme.begin(0x77)) {
+    logData("ERROR: BME280 tidak terdeteksi! Cek wiring SDA(21)/SCL(22).");
     while (1);
   }
 
-  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,
-                  Adafruit_BMP280::SAMPLING_X2,
-                  Adafruit_BMP280::SAMPLING_X16,
-                  Adafruit_BMP280::FILTER_X16,
-                  Adafruit_BMP280::STANDBY_MS_500);
+  bme.setSampling(Adafruit_BME280::MODE_NORMAL,
+                  Adafruit_BME280::SAMPLING_X2,
+                  Adafruit_BME280::SAMPLING_X16,
+                  Adafruit_BME280::SAMPLING_X1,
+                  Adafruit_BME280::FILTER_X16,
+                  Adafruit_BME280::STANDBY_MS_500);
 
   setup_wifi();
   client.setServer(mqtt_server, mqtt_port);
@@ -100,22 +100,23 @@ void loop() {
   if (sekarang - waktuTerakhirKirim >= INTERVAL_KIRIM) {
     waktuTerakhirKirim = sekarang;
 
-    float suhu    = bmp.readTemperature();
-    float tekanan = bmp.readPressure() / 100.0F;
-    int rawSoil   = analogRead(SOIL_ADC_PIN);
-    int tanah     = constrain(map(rawSoil, NILAI_KERING, NILAI_BASAH, 0, 100), 0, 100);
+    float suhu       = bme.readTemperature();
+    float tekanan    = bme.readPressure() / 100.0F;
+    float kelembapan = bme.readHumidity();
+    int rawSoil      = analogRead(SOIL_ADC_PIN);
+    int tanah        = constrain(map(rawSoil, NILAI_KERING, NILAI_BASAH, 0, 100), 0, 100);
 
     char payload[160];
     snprintf(payload, sizeof(payload),
-             "{\"blok\":\"%s\",\"temp\":%.2f,\"pres\":%.2f,\"soil_pct\":%d,\"soil_raw\":%d}",
-             id_blok, suhu, tekanan, tanah, rawSoil);
+             "{\"temp\":%.2f,\"pres\":%.2f,\"hum\":%.2f,\"soil_pct\":%d,\"soil_raw\":%d}",
+             suhu, tekanan, kelembapan, tanah, rawSoil);
 
     String statusMQTT = (client.connected() && client.publish(mqtt_topic, payload)) ? "OK" : "FAIL";
 
     String namaWiFi = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : "OFFLINE";
     String logLine = "[" + namaWiFi + " | MQTT:" + statusMQTT + "] " +
                      "T:" + String(suhu, 1) + "C | P:" + String(tekanan, 0) +
-                     "hPa | Soil:" + String(tanah) + "% (" + String(rawSoil) + ")";
+                     "hPa | H:" + String(kelembapan, 1) + "% | Soil:" + String(tanah) + "% (" + String(rawSoil) + ")";
     logData(logLine);
   }
 }

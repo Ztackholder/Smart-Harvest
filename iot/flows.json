@@ -1,15 +1,15 @@
 [
     {
-        "id": "916b033f06e7100d",
+        "id": "tab_monitoring_lahan",
         "type": "tab",
         "label": "Monitoring Lahan",
         "disabled": false,
         "info": ""
     },
     {
-        "id": "8779dca2c3d45cb8",
+        "id": "mqtt_in_sensor",
         "type": "mqtt in",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "MQTT Sensor Lingkungan",
         "topic": "tani/sensor/lingkungan",
         "qos": "0",
@@ -23,15 +23,15 @@
         "y": 180,
         "wires": [
             [
-                "42e44699871d37b5",
-                "89529491ba8aae2a"
+                "json_parser_node",
+                "set_header_gsheet"
             ]
         ]
     },
     {
-        "id": "42e44699871d37b5",
+        "id": "json_parser_node",
         "type": "json",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "Parse JSON",
         "property": "payload",
         "action": "obj",
@@ -40,17 +40,17 @@
         "y": 120,
         "wires": [
             [
-                "8e94a740932cc48a"
+                "func_split_sensor"
             ]
         ]
     },
     {
-        "id": "8e94a740932cc48a",
+        "id": "func_split_sensor",
         "type": "function",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "Pecah Data Sensor",
-        "func": "var data = msg.payload;\n\nvar msgTemp = { payload: Number(data.temp) };\nvar msgPres = { payload: Number(data.pres) };\nvar msgSoil = { payload: Number(data.soil_pct) };\n\nreturn [msgTemp, msgPres, msgSoil];",
-        "outputs": 3,
+        "func": "var data = msg.payload;\n\nvar msgTemp = { payload: Number(data.temp) };\nvar msgPres = { payload: Number(data.pres) };\nvar msgHum  = { payload: Number(data.hum) };\nvar msgSoil = { payload: Number(data.soil_pct) };\n\nreturn [msgTemp, msgPres, msgHum, msgSoil];",
+        "outputs": 4,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
@@ -60,22 +60,26 @@
         "y": 120,
         "wires": [
             [
-                "382336a0f1e3efc7",
-                "7fed65827aead630"
+                "ui_gauge_temp",
+                "ui_chart_temp"
             ],
             [
-                "6bbad881b92ebc56"
+                "ui_gauge_pres"
             ],
             [
-                "fba576daac45cd87",
-                "43d8c7ad78749976"
+                "ui_gauge_hum",
+                "ui_chart_hum"
+            ],
+            [
+                "ui_gauge_soil",
+                "ui_chart_soil"
             ]
         ]
     },
     {
-        "id": "89529491ba8aae2a",
+        "id": "set_header_gsheet",
         "type": "change",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "Set Header JSON",
         "rules": [
             {
@@ -92,17 +96,17 @@
         "to": "",
         "reg": false,
         "x": 410,
-        "y": 260,
+        "y": 320,
         "wires": [
             [
-                "5f01dc561ecb5e4f"
+                "http_post_gsheet"
             ]
         ]
     },
     {
-        "id": "5f01dc561ecb5e4f",
+        "id": "http_post_gsheet",
         "type": "http request",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "Kirim ke Google Sheets",
         "method": "POST",
         "ret": "txt",
@@ -116,17 +120,17 @@
         "senderr": false,
         "headers": [],
         "x": 650,
-        "y": 260,
+        "y": 320,
         "wires": [
             [
-                "ddae9dae212e9ba7"
+                "debug_gsheet_res"
             ]
         ]
     },
     {
-        "id": "ddae9dae212e9ba7",
+        "id": "debug_gsheet_res",
         "type": "debug",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "Status Google Sheets",
         "active": true,
         "tosidebar": true,
@@ -137,17 +141,17 @@
         "statusVal": "payload",
         "statusType": "auto",
         "x": 900,
-        "y": 260,
+        "y": 320,
         "wires": []
     },
     {
-        "id": "382336a0f1e3efc7",
+        "id": "ui_gauge_temp",
         "type": "ui_gauge",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "Suhu Udara",
-        "group": "e5e802e29102d031",
+        "group": "ui_group_lahan",
         "order": 1,
-        "width": 4,
+        "width": 3,
         "height": 4,
         "gtype": "gage",
         "title": "Suhu Udara",
@@ -165,17 +169,17 @@
         "diff": false,
         "className": "",
         "x": 850,
-        "y": 40,
+        "y": 20,
         "wires": []
     },
     {
-        "id": "6bbad881b92ebc56",
+        "id": "ui_gauge_pres",
         "type": "ui_gauge",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "Tekanan Udara",
-        "group": "e5e802e29102d031",
+        "group": "ui_group_lahan",
         "order": 2,
-        "width": 4,
+        "width": 3,
         "height": 4,
         "gtype": "gage",
         "title": "Tekanan Udara",
@@ -193,17 +197,45 @@
         "diff": false,
         "className": "",
         "x": 860,
-        "y": 120,
+        "y": 100,
         "wires": []
     },
     {
-        "id": "fba576daac45cd87",
+        "id": "ui_gauge_hum",
         "type": "ui_gauge",
-        "z": "916b033f06e7100d",
-        "name": "Kelembapan Tanah",
-        "group": "e5e802e29102d031",
+        "z": "tab_monitoring_lahan",
+        "name": "Kelembapan Udara",
+        "group": "ui_group_lahan",
         "order": 3,
-        "width": 4,
+        "width": 3,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Kelembapan Udara",
+        "label": "%",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "100",
+        "colors": [
+            "#e67e22",
+            "#2ecc71",
+            "#3498db"
+        ],
+        "seg1": "40",
+        "seg2": "80",
+        "diff": false,
+        "className": "",
+        "x": 870,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "ui_gauge_soil",
+        "type": "ui_gauge",
+        "z": "tab_monitoring_lahan",
+        "name": "Kelembapan Tanah",
+        "group": "ui_group_lahan",
+        "order": 4,
+        "width": 3,
         "height": 4,
         "gtype": "gage",
         "title": "Kelembapan Tanah",
@@ -221,17 +253,17 @@
         "diff": false,
         "className": "",
         "x": 870,
-        "y": 160,
+        "y": 220,
         "wires": []
     },
     {
-        "id": "7fed65827aead630",
+        "id": "ui_chart_temp",
         "type": "ui_chart",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
         "name": "Grafik Suhu",
-        "group": "e5e802e29102d031",
-        "order": 4,
-        "width": 6,
+        "group": "ui_group_lahan",
+        "order": 5,
+        "width": 4,
         "height": 4,
         "label": "Tren Suhu (°C)",
         "chartType": "line",
@@ -263,19 +295,63 @@
         "useDifferentColor": false,
         "className": "",
         "x": 850,
-        "y": 80,
+        "y": 60,
         "wires": [
             []
         ]
     },
     {
-        "id": "43d8c7ad78749976",
+        "id": "ui_chart_hum",
         "type": "ui_chart",
-        "z": "916b033f06e7100d",
+        "z": "tab_monitoring_lahan",
+        "name": "Grafik Kelembapan Udara",
+        "group": "ui_group_lahan",
+        "order": 6,
+        "width": 4,
+        "height": 4,
+        "label": "Tren Kelembapan Udara (%)",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "Menunggu data sensor...",
+        "dot": false,
+        "ymin": "0",
+        "ymax": "100",
+        "removeOlder": "1",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "3600",
+        "cutout": 0,
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#3498db",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 890,
+        "y": 180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ui_chart_soil",
+        "type": "ui_chart",
+        "z": "tab_monitoring_lahan",
         "name": "Grafik Kelembapan Tanah",
-        "group": "e5e802e29102d031",
-        "order": 5,
-        "width": 6,
+        "group": "ui_group_lahan",
+        "order": 7,
+        "width": 4,
         "height": 4,
         "label": "Tren Kelembapan Tanah (%)",
         "chartType": "line",
@@ -307,7 +383,7 @@
         "useDifferentColor": false,
         "className": "",
         "x": 890,
-        "y": 200,
+        "y": 260,
         "wires": [
             []
         ]
@@ -344,7 +420,7 @@
         "sessionExpiry": ""
     },
     {
-        "id": "e5e802e29102d031",
+        "id": "ui_group_lahan",
         "type": "ui_group",
         "name": "Monitoring Lahan",
         "tab": "ui_tab_pertanian",
@@ -364,7 +440,7 @@
         "hidden": false
     },
     {
-        "id": "8b3928d62e6faf08",
+        "id": "529284de87145010",
         "type": "global-config",
         "env": [],
         "modules": {
