@@ -1,4 +1,4 @@
-"""scikit-learn preprocessing and estimator pipelines."""
+# Pipeline preprocessing dan estimator scikit-learn.
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .features import FEATURE_ALLOWLISTS
 
 
 def make_preprocessor(route: str) -> ColumnTransformer:
-    """Create route-specific, train-fitted categorical and numeric transforms."""
+    # Ubah kategori tanaman dan isi nilai numerik kosong berdasarkan data training.
     if route not in FEATURE_ALLOWLISTS:
         raise ValueError(f"Unknown prediction route: {route}")
     features = FEATURE_ALLOWLISTS[route]
@@ -35,7 +35,7 @@ def make_preprocessor(route: str) -> ColumnTransformer:
 
 
 def make_pipeline(route: str, estimator) -> Pipeline:
-    """Wrap a model with the feature contract and learned preprocessing."""
+    # Satukan preprocessing dan estimator agar inference memakai transformasi yang sama.
     return Pipeline(
         steps=[
             ("preprocessor", make_preprocessor(route)),

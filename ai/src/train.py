@@ -1,4 +1,4 @@
-"""Train, select, serialize, and evaluate the SmartHarvest SVC-03 model."""
+# Latih, pilih, serialisasi, dan evaluasi model SVC-03 SmartHarvest.
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ QUALITY_COLUMNS = (
 
 
 class DatasetIntegrityError(ValueError):
-    """Raised when the supplied v3 data fail the documented contract."""
+    # Digunakan saat data v3 tidak memenuhi kontrak yang didokumentasikan.
 
 
 def _require_columns(frame: pd.DataFrame, expected: tuple[str, ...], name: str) -> None:
@@ -494,8 +494,8 @@ def _print_validation_results(
     print(f"\nSelected by validation MAE: {best_params}")
     print(f"  {_format_metrics(best_metrics)}")
 
-    # Route diagnostics use training rows only for fitting; route-specific
-    # validation subsets are reported but do not alter the selected parameters.
+    # Diagnostik jalur dilatih hanya dengan data train; hasil validation tidak
+    # mengubah hyperparameter yang sudah dipilih.
     train_scopes = {
         "full": train_routes.eq("full"),
         "air": train_routes.isin(("full", "air")),
@@ -620,15 +620,15 @@ def evaluate_holdout(
     test_quality: pd.DataFrame,
     model_path: Path,
 ) -> dict[str, float | int]:
-    """Evaluate the serialized predictor only after validation selection/refit."""
+    # Evaluasi predictor tersimpan setelah pemilihan dan pelatihan ulang selesai.
     predictor = HarvestPredictor(model_path)
     test_frame, responses = _predict_test_rows(predictor, test_inputs, test_quality)
     unavailable = [response for response in responses if response["status"] != "PREDICTED"]
     if unavailable:
         raise RuntimeError(f"Test inference returned unavailable for {len(unavailable)} rows")
 
-    # Ground-truth labels are read only after the final model has been selected,
-    # refit and serialized. They are not passed to training or model selection.
+    # Label aktual baru dibaca setelah model dipilih, dilatih ulang, dan diserialisasi.
+    # Label ini tidak digunakan untuk training atau pemilihan model.
     ground_truth = pd.read_csv(data_dir / "test_ground_truth.csv")
     if tuple(ground_truth.columns) != (
         "farm_id",
@@ -799,8 +799,8 @@ def train_and_evaluate(
         print(f"  {route:<8} rows={entry['training_rows']} features={len(entry['features'])}")
     print(f"  artifact={model_path} ({size_kb:.1f} KiB)")
 
-    # Test labels are not read until after validation-based selection, final refit,
-    # serialization, and loading of the exact backend-facing artifact.
+    # Label test dibaca setelah pemilihan berbasis validation, pelatihan ulang,
+    # serialisasi, dan pemuatan artifact yang akan dipakai backend.
     test_metrics = evaluate_holdout(
         data_dir, data["test_inputs"], data["test_quality"], model_path
     )

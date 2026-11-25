@@ -1,4 +1,4 @@
-"""Backend-ready inference for the SmartHarvest SVC-03 model bundle."""
+# Modul inferensi SVC-03 SmartHarvest yang siap dipanggil backend.
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _numeric_input(value: object) -> float | None:
 
 
 class HarvestPredictor:
-    """Load once and predict non-negative total harvest kg for one planting."""
+    # Muat model sekali dan prediksi total panen non-negatif untuk satu penanaman.
 
     def __init__(self, model_path: str | Path):
         path = Path(model_path).expanduser()
@@ -47,7 +47,7 @@ class HarvestPredictor:
         if not path.is_file():
             raise FileNotFoundError(f"Harvest model artifact not found: {path}")
 
-        # Only load artifacts generated and trusted by the local training pipeline.
+        # Muat hanya artifact yang dibuat dan dipercaya dari pipeline training lokal.
         bundle = joblib.load(path)
         if not isinstance(bundle, dict) or bundle.get("artifact_schema") != 1:
             raise ValueError("Unsupported SmartHarvest model artifact")
@@ -66,8 +66,8 @@ class HarvestPredictor:
                 model_entry["pipeline"], "named_steps", {}
             ).get("regressor")
             if hasattr(estimator, "n_jobs"):
-                # Predictions arrive one planting at a time in the backend. Avoid
-                # starting a worker pool for every single-row forest prediction.
+                # Backend mengirim prediksi per penanaman; hindari membuat worker pool
+                # baru untuk setiap prediksi satu baris.
                 estimator.n_jobs = 1
 
         self._routes = routes
@@ -93,7 +93,7 @@ class HarvestPredictor:
         }
 
     def predict(self, input_data: Mapping[str, object]) -> dict[str, object]:
-        """Predict one planting. Sensor quality failures select a lower route."""
+        # Validasi input, pilih jalur sensor, lalu prediksi satu penanaman.
         if not isinstance(input_data, Mapping):
             return self._unavailable(
                 "INVALID_INPUT", "input_data must be a mapping"
@@ -145,7 +145,7 @@ class HarvestPredictor:
         if quality is None:
             quality = input_data.get("quality_metadata")
         if quality is None:
-            # Accept a flattened v3 sidecar as well as the documented nested object.
+            # Terima metadata v3 dalam bentuk datar maupun objek bertingkat.
             quality_keys = {
                 "air_source",
                 "soil_source",

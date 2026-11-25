@@ -1,4 +1,4 @@
-"""Feature contract, validation helpers, and sensor availability routing."""
+# Kontrak fitur, validasi nilai, dan pemilihan jalur berdasarkan ketersediaan sensor.
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ SOIL_FEATURES = (
 
 
 def _finite_number(value: object) -> float | None:
-    """Return a finite float, or None for missing/invalid values."""
+    # Anggap nilai sensor kosong atau tidak terbatas sebagai data yang tidak tersedia.
     if value is None or isinstance(value, (bool, np.bool_)):
         return None
     try:
@@ -142,13 +142,7 @@ def _valid_soil_measurements(values: Mapping[str, object]) -> bool:
 def select_route(
     values: Mapping[str, object], quality: Mapping[str, object] | None
 ) -> str:
-    """Choose the richest route supported by valid readings and quality metadata.
-
-    Weather API summaries have no IoT sample-slot counts in the v3 sidecar. Their
-    explicit source and valid 7-day values establish availability; if an age is
-    supplied it must still be fresh. IoT summaries require coverage and freshness.
-    Missing quality metadata never promotes sensor readings into an AI route.
-    """
+    # Ringkasan cuaca memakai metadata sumber; pembacaan IoT juga perlu cakupan dan kesegaran.
     if not isinstance(quality, Mapping) or _status_is_stale(quality):
         return "manual"
 
@@ -195,7 +189,7 @@ def parse_prediction_dates(
     prediction_at: object,
     target_harvest_date: object,
 ) -> tuple[int, int]:
-    """Return local crop age and horizon in days after validating date semantics."""
+    # Hitung umur tanaman dan jarak ke panen dalam waktu Jakarta setelah memvalidasi tanggal.
     if isinstance(planting_date, datetime):
         raise ValueError("planting_date must be a date, not a datetime")
     if isinstance(target_harvest_date, datetime):
@@ -236,7 +230,7 @@ def parse_prediction_dates(
 
 
 def build_features(frame: pd.DataFrame, route: str) -> pd.DataFrame:
-    """Build an allowlisted feature frame from dataset rows for one route."""
+    # Bentuk hanya fitur yang diizinkan untuk jalur yang dipilih.
     if route not in FEATURE_ALLOWLISTS:
         raise ValueError(f"Unknown prediction route: {route}")
     required = {
@@ -293,7 +287,7 @@ def build_features(frame: pd.DataFrame, route: str) -> pd.DataFrame:
 
 
 def normalized_yield(frame: pd.DataFrame) -> np.ndarray:
-    """Return kg/m² targets while preserving valid zero-harvest outcomes."""
+    # Pertahankan hasil panen nol dan nyatakan target dalam kg per meter persegi.
     if "actual_harvest_kg" not in frame or "planted_area_m2" not in frame:
         raise ValueError("actual_harvest_kg and planted_area_m2 are required")
     target = pd.to_numeric(frame["actual_harvest_kg"], errors="raise").to_numpy(float)

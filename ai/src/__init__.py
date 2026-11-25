@@ -1,1 +1,1 @@
-"""SmartHarvest SVC-03 model training and inference package."""
+# Package training dan inferensi model SVC-03 SmartHarvest.
