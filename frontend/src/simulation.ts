@@ -1,61 +1,72 @@
-import { ApiError, demoPeriod, type Account, type Actual, type ActualInput, type Allocation, type AllocationInput,
-  type ApprovalInput, type Availability, type Estimate, type EstimateInput, type Feedback, type FeedbackInput,
-  type Observation, type ObservationInput, type Prediction, type PredictionInput, type Risk, type RiskInput,
-  type Role, type Selection, type SelectionInput } from './contracts'
+import {
+  ApiError, demoPeriod, type Account, type Actual, type ActualInput, type Allocation, type AllocationInput,
+  type ApprovalInput, type Availability, type Catalog, type CommodityPlan, type CommodityPlanInput,
+  type Estimate, type EstimateInput, type Feedback, type FeedbackInput, type Observation, type ObservationInput,
+  type Prediction, type PredictionInput, type Receipt, type ReceiptInput, type Risk, type RiskInput,
+  type Role, type Selection, type SelectionInput,
+} from './contracts'
 
 export type Activity = {
   observations: Observation[]
   estimates: Estimate[]
   predictions: Prediction[]
   risks: Risk[]
+  plans: CommodityPlan[]
   approvals: Availability[]
   actuals: Actual[]
+  selections: Selection[]
 }
 
-export const emptyActivity: Activity = {
-  observations: [], estimates: [], predictions: [], risks: [], approvals: [], actuals: [],
-}
+type State = Activity & { adjustments: Allocation[]; feedback: Feedback[]; receipts: Receipt[] }
+const key = 'smartharvest.simulation.v2'
+const timestamp = '2026-11-26T09:05:00+07:00'
 
-type State = Activity & { selections: Selection[]; adjustments: Allocation[]; feedback: Feedback[] }
-const key = 'smartharvest.simulation.v1'
-const timestamp = '2026-11-11T09:05:00+07:00'
 const createId = (prefix: string) => {
   const bytes = crypto.getRandomValues(new Uint8Array(6))
   const suffix = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase()
   return `${prefix}-${suffix}`
 }
 
+export const simulationCatalog: Catalog = {
+  farms: [{ farm_id: 'FARM-01', name: 'Kebun Demo', synthetic: true }],
+  crops: [{ crop_id: 'SPINACH', name: 'Bayam', supported_by_model: true }],
+  periods: [demoPeriod],
+  members: [
+    { member_id: 'MBR-001', name: 'Anggota 1', package_name: 'Paket Pilih', eligible: true, quota_kg: 2 },
+    { member_id: 'MBR-002', name: 'Anggota 2', package_name: 'Paket Reguler', eligible: false, quota_kg: 0 },
+  ],
+}
+
 function seed(): State {
-  const crops = ['SPINACH', 'PAKCHOY']
-  const predictions: Prediction[] = crops.map((crop_id, i) => ({
-    farm_id: 'FARM-01', crop_id, target_period: demoPeriod, prediction_id: `PRED-00${i + 1}`,
-    predicted_quantity_kg: [12.4, 18.6][i], model_version: 'rf-demo-v1',
-    source_of_training_data: 'synthetic', generated_at: timestamp, status: 'generated', requires_coordinator_review: true,
-  }))
   return {
     observations: [{
       farm_id: 'FARM-01', crop_id: 'SPINACH', device_id: 'SYN-ESP32-01', source: 'simulated_iot',
-      observation_id: 'OBS-001', status: 'accepted', observed_at: timestamp, recorded_at: timestamp,
+      provenance: 'local_simulator', observation_id: 'OBS-001', status: 'RECORDED',
+      observed_at: timestamp, recorded_at: timestamp,
       measurements: [
-        { type: 'air_temperature', value: 25.4, unit: 'C' },
-        { type: 'relative_humidity', value: 70, unit: 'percent' },
+        { type: 'air_temperature', value: 27.4, unit: 'C' },
+        { type: 'relative_humidity', value: 74.5, unit: 'percent' },
+        { type: 'soil_moisture_index', value: 34, unit: 'percent' },
+        { type: 'pressure', value: 926.1, unit: 'hPa' },
       ],
     }],
     estimates: [{
-      farm_id: 'FARM-01', crop_id: 'SPINACH', harvest_period: demoPeriod, estimated_quantity_kg: 13,
-      estimate_id: 'EST-001', recorded_at: timestamp, status: 'accepted',
+      farm_id: 'FARM-01', crop_id: 'SPINACH', harvest_period: demoPeriod, estimated_quantity_kg: 15,
+      estimate_id: 'EST-001', recorded_at: timestamp, status: 'RECORDED',
     }],
-    predictions,
-    risks: predictions.map(({ prediction_id, predicted_quantity_kg }, i) => ({
-      prediction_id, predicted_quantity_kg, planned_demand_kg: [15, 15][i],
-      shortage_gap_kg: [2.6, 0][i], status: i === 0 ? 'SHORTAGE_POSSIBLE' : 'NO_SHORTAGE_INDICATED', assessed_at: timestamp,
-    })),
-    approvals: [{
-      farm_id: 'FARM-01', crop_id: 'PAKCHOY', period: demoPeriod, approved_quantity_kg: 15,
-      basis_type: 'PREDICTION', basis_id: 'PRED-002', approval_note: 'Pasokan mencukupi kebutuhan minggu ini.',
-      availability_id: 'AVL-001', status: 'APPROVED', version: 1, approved_by: 'COORD-001', approved_at: '2026-11-11T09:35:00+07:00',
+    predictions: [{
+      farm_id: 'FARM-01', crop_id: 'SPINACH', target_period: demoPeriod, prediction_id: 'PRED-001',
+      predicted_quantity_kg: 12.4, model_version: 'rf-synthetic-v3', source_of_training_data: 'synthetic',
+      inference_route: 'manual', generated_at: timestamp, status: 'generated', requires_coordinator_review: true,
     }],
-    actuals: [], selections: [], adjustments: [], feedback: [],
+    risks: [],
+    plans: [],
+    approvals: [],
+    actuals: [],
+    selections: [],
+    adjustments: [],
+    feedback: [],
+    receipts: [],
   }
 }
 
@@ -63,8 +74,8 @@ let inMemory: State | undefined
 
 export function readSimulation(): State {
   try {
-    const value = localStorage.getItem(key)
-    if (value) return JSON.parse(value) as State
+    const raw = localStorage.getItem(key)
+    if (raw) return { ...seed(), ...(JSON.parse(raw) as Partial<State>) }
   } catch {
     return inMemory ?? seed()
   }
@@ -75,200 +86,238 @@ const fail = (status: number, message: string, code?: string): never => { throw 
 
 export async function simulate(account: Account, url: string, body?: unknown) {
   const handle = () => applySimulation(account, url, body)
-  // The lock keeps version checks and writes together across tabs when Web Locks is available.
   if (body !== undefined && navigator.locks) return navigator.locks.request(key, handle)
   return handle()
+}
+
+function buildTelemetry(observations: Observation[]) {
+  const latest = observations[0]
+  const readings = {
+    air_temperature: latest?.measurements.find(m => m.type === 'air_temperature')?.value ?? null,
+    relative_humidity: latest?.measurements.find(m => m.type === 'relative_humidity')?.value ?? null,
+    soil_moisture_index: latest?.measurements.find(m => m.type === 'soil_moisture_index')?.value ?? null,
+    pressure: latest?.measurements.find(m => m.type === 'pressure')?.value ?? null,
+    soil_raw: latest?.measurements.find(m => m.type === 'soil_raw')?.value ?? null,
+  }
+  const cov = { valid_slots: observations.length ? 1 : 0, expected_slots: 672, coverage: observations.length ? 0.0015 : 0, last_seen_hours: latest ? 0.1 : null, usable: false }
+  return {
+    farm_id: 'FARM-01',
+    status: latest ? 'stale' as const : 'unknown' as const,
+    device_id: latest?.device_id ?? null,
+    source: latest?.source ?? null,
+    provenance: latest?.provenance ?? null,
+    last_observed_at: latest?.observed_at ?? null,
+    last_received_at: latest?.recorded_at ?? null,
+    age_seconds: latest ? 60 : null,
+    readings,
+    coverage: { air_temperature: cov, relative_humidity: cov, soil_moisture_index: cov },
+    observation_count_7d: observations.length,
+  }
 }
 
 function applySimulation(account: Account, url: string, body?: unknown) {
   const state = readSimulation()
   const [path, query] = url.split('?')
-  const period = new URLSearchParams(query).get('period')
+  const params = new URLSearchParams(query)
+  const period = params.get('period') ?? demoPeriod
   const now = new Date().toISOString()
   const allow = (...roles: Role[]) => {
     if (!roles.includes(account.role)) fail(403, 'Akun ini tidak memiliki izin untuk tindakan tersebut.')
   }
-  const save = <T>(value: T) => {
+  const save = <T>(val: T) => {
     inMemory = state
-    try { localStorage.setItem(key, JSON.stringify(state)) } catch { /* Continue the demo in memory. */ }
-    return value
-  }
-  const approved = (id: string) => state.approvals.find(row => row.availability_id === id)
-    ?? fail(404, 'Ketersediaan tidak ditemukan.')
-  const prediction = (id: string) => state.predictions.find(row => row.prediction_id === id)
-    ?? fail(404, 'Prediksi tidak ditemukan. Periksa ID prediksi.')
-  const amount = (value: number) => {
-    if (!Number.isFinite(value) || value < 0) fail(422, 'Kuantitas harus berupa angka nonnegatif.')
+    try { localStorage.setItem(key, JSON.stringify(state)) } catch { /* ignore */ }
+    return val
   }
 
   if (body === undefined) {
-    if (path.startsWith('/harvest-predictions/')) {
+    if (path === '/catalog') {
+      return { ...simulationCatalog, members: account.role === 'COORDINATOR' ? simulationCatalog.members : [] }
+    }
+    if (path === '/coordinator/overview') {
       allow('COORDINATOR')
-      return prediction(decodeURIComponent(path.split('/').at(-1)!))
+      const planting = { farm_id: 'FARM-01', crop_id: 'SPINACH', planting_id: 'PLANT-FARM01-SPINACH', planting_date: '2026-10-01', target_harvest_date: '2026-11-27', planted_area_m2: 8, plant_count: 64, synthetic: true }
+      const ests = state.estimates.filter(e => e.harvest_period === period)
+      const preds = state.predictions.filter(p => p.target_period === period)
+      const appr = state.approvals.find(a => a.period === period) ?? null
+      const act = state.actuals.find(a => a.period === period) ?? null
+      return {
+        period,
+        plantings: [{
+          planting, farm: simulationCatalog.farms[0], crop: simulationCatalog.crops[0],
+          latest_estimate: ests[0] ?? null, latest_prediction: preds[0] ?? null, prediction_history: preds,
+          prediction_state: preds[0] ? { farm_id: 'FARM-01', crop_id: 'SPINACH', period, status: 'ready', latest_prediction_id: preds[0].prediction_id, predicted_quantity_kg: preds[0].predicted_quantity_kg, inference_route: preds[0].inference_route, last_success_at: preds[0].generated_at } : null,
+          approval: appr, actual_harvest: act, telemetry: buildTelemetry(state.observations),
+        }],
+        commodity_plans: state.plans.filter(p => p.period === period),
+        risks: state.risks,
+        approvals: state.approvals.filter(a => a.period === period),
+        selections: state.selections.filter(s => s.period === period),
+        adjustments: state.adjustments,
+        receipts: state.receipts.filter(r => r.period === period),
+        feedback: state.feedback.filter(f => f.period === period),
+        members: simulationCatalog.members,
+      }
     }
-    if (path === '/approved-availability') {
-      allow('COORDINATOR', 'MEMBER')
-      return { items: state.approvals.filter(row => row.period === period) }
+    if (path === '/farmer/overview') {
+      allow('FARMER')
+      const planting = { farm_id: 'FARM-01', crop_id: 'SPINACH', planting_id: 'PLANT-FARM01-SPINACH', planting_date: '2026-10-01', target_harvest_date: '2026-11-27', planted_area_m2: 8, plant_count: 64, synthetic: true }
+      const ests = state.estimates.filter(e => e.harvest_period === period)
+      const preds = state.predictions.filter(p => p.target_period === period)
+      return {
+        period,
+        plantings: [{
+          planting, farm: simulationCatalog.farms[0], crop: simulationCatalog.crops[0],
+          latest_estimate: ests[0] ?? null, estimates: ests, latest_prediction: preds[0] ?? null,
+          telemetry: buildTelemetry(state.observations),
+        }],
+        recent_observations: state.observations.slice(0, 30),
+      }
     }
-    if (path === '/allocation-updates') {
+    if (path === '/member/overview') {
       allow('MEMBER')
-      const items = state.adjustments.flatMap(change => {
-        const a = approved(change.availability_id)
-        const allocation = change.member_allocations.find(row => row.member_id === account.memberId)
-        if (a.period !== period || !allocation) return []
-        return [{
-          adjustment_id: change.adjustment_id, availability_id: a.availability_id, farm_id: a.farm_id, crop_id: a.crop_id,
-          quantity_kg: allocation.quantity_kg, reason: change.reason, version: change.version, approved_at: change.approved_at,
-        }]
-      })
-      return { items }
+      const m = simulationCatalog.members.find(x => x.member_id === account.memberId) ?? simulationCatalog.members[0]
+      return {
+        period,
+        member: { member_id: m.member_id, name: m.name ?? m.member_id, package_name: m.package_name ?? 'Paket', eligible: m.eligible, quota_kg: m.quota_kg ?? 0 },
+        availability: state.approvals.filter(a => a.period === period).map(a => ({
+          availability_id: a.availability_id, farm_id: a.farm_id, crop_id: a.crop_id, period: a.period,
+          approved_quantity_kg: a.approved_quantity_kg, remaining_quantity_kg: a.approved_quantity_kg,
+          status: a.status, version: a.version, approved_at: a.approved_at,
+        })),
+        selection: state.selections.find(s => s.period === period && s.member_id === account.memberId) ?? null,
+        updates: state.adjustments.flatMap(c => c.member_allocations.filter(a => a.member_id === account.memberId).map(a => ({
+          adjustment_id: c.adjustment_id, availability_id: c.availability_id, farm_id: 'FARM-01', crop_id: 'SPINACH',
+          quantity_kg: a.quantity_kg, reason: c.reason, version: c.version, approved_at: c.approved_at,
+        }))),
+        receipt: state.receipts.find(r => r.period === period && r.member_id === account.memberId) ?? null,
+        feedback: state.feedback.find(f => f.period === period && f.member_id === account.memberId) ?? null,
+        history: {
+          selections: state.selections.filter(s => s.member_id === account.memberId),
+          feedback: state.feedback.filter(f => f.member_id === account.memberId),
+        },
+      }
     }
+    if (path === '/telemetry/summary') return buildTelemetry(state.observations)
+    if (path === '/telemetry/history') {
+      const range = (params.get('range') as '1h' | '24h' | '7d') ?? '24h'
+      return { farm_id: 'FARM-01', range, bucket_seconds: 900, window_start: now, window_end: now, series: [] }
+    }
+    if (path === '/farm-observations') return { items: state.observations }
+    if (path === '/approved-availability') return { items: state.approvals.filter(a => a.period === period) }
+    if (path === '/member-selections') return { items: state.selections.filter(s => s.period === period) }
+    if (path === '/allocation-updates') return { items: [] }
   }
 
   switch (path) {
     case '/farm-observations': {
       allow('FARMER')
       const input = body as ObservationInput
-      const valid = { air_temperature: ['C', -50, 65], relative_humidity: ['percent', 0, 100], soil_moisture_index: ['percent', 0, 100] } as const
-      const measurementTypes = new Set(input.measurements.map(row => row.type))
-      if (!input.farm_id || !Number.isFinite(Date.parse(input.observed_at)) ||
-          !input.measurements.length || measurementTypes.size !== input.measurements.length ||
-          (['iot', 'simulated_iot'].includes(input.source) && !input.device_id) ||
-          input.measurements.some(({ type, unit, value }) => {
-            const range = valid[type as keyof typeof valid]
-            return !range || unit !== range[0] || !Number.isFinite(value) || value < range[1] || value > range[2]
-          })) fail(422, 'Periksa jenis, satuan, rentang pengukuran, dan ID perangkat.', 'INVALID_MEASUREMENT')
-      if (state.observations.some(row => row.farm_id === input.farm_id && row.crop_id === input.crop_id &&
-          row.source === input.source && row.device_id === input.device_id &&
-          Date.parse(row.observed_at) === Date.parse(input.observed_at))) {
-        fail(409, 'Observasi dengan sumber dan waktu ini sudah tercatat.')
-      }
-      const result = { ...input, observation_id: createId('OBS'), status: 'accepted', recorded_at: now }
+      const result: Observation = { ...input, observation_id: createId('OBS'), status: 'RECORDED', recorded_at: now }
       state.observations.unshift(result)
       return save(result)
     }
     case '/harvest-estimates': {
       allow('FARMER')
       const input = body as EstimateInput
-      amount(input.estimated_quantity_kg)
-      const result = { ...input, estimate_id: createId('EST'), status: 'accepted', recorded_at: now }
+      const result: Estimate = { ...input, estimate_id: createId('EST'), status: 'RECORDED', recorded_at: now }
       state.estimates.unshift(result)
       return save(result)
     }
     case '/harvest-predictions': {
       allow('COORDINATOR')
-      const { data_reference_ids, ...input } = body as PredictionInput
-      const matchFarm = (row: { farm_id: string; crop_id?: string }) =>
-        row.farm_id === input.farm_id && (!row.crop_id || row.crop_id === input.crop_id)
-      const matches = data_reference_ids.every(id =>
-        state.observations.some(row => row.observation_id === id && matchFarm(row)) ||
-        state.estimates.some(row => row.estimate_id === id && matchFarm(row) && row.harvest_period === input.target_period))
-      if (!data_reference_ids.length || !matches) {
-        fail(422, 'Referensi data tidak ditemukan untuk kebun dan komoditas ini.', 'PREDICTION_UNAVAILABLE')
-      }
-      const quantity = input.crop_id === 'SPINACH' ? 12.4 : 18.6
-      const result = {
-        ...input, prediction_id: createId('PRED'), predicted_quantity_kg: quantity, model_version: 'rf-demo-v1',
-        source_of_training_data: 'synthetic', generated_at: now, status: 'generated', requires_coordinator_review: true,
+      const input = body as PredictionInput
+      const result: Prediction = {
+        farm_id: input.farm_id, crop_id: input.crop_id, target_period: input.target_period,
+        prediction_id: createId('PRED'), predicted_quantity_kg: 12.4, model_version: 'rf-synthetic-v3',
+        source_of_training_data: 'synthetic', inference_route: 'manual', generated_at: now, status: 'generated',
+        requires_coordinator_review: true,
       }
       state.predictions.unshift(result)
       return save(result)
     }
+    case '/commodity-plans': {
+      allow('COORDINATOR')
+      const input = body as CommodityPlanInput
+      const pred = state.predictions.find(p => p.crop_id === input.crop_id && p.target_period === input.period)
+      const total = pred ? pred.predicted_quantity_kg : 0
+      const gap = Math.max(0, input.planned_demand_kg - total)
+      const plan: CommodityPlan = {
+        plan_id: createId('PLAN'), crop_id: input.crop_id, period: input.period, plan_version: state.plans.length + 1,
+        planned_demand_kg: input.planned_demand_kg, total_supply_kg: total, shortage_gap_kg: gap,
+        status: gap > 0 ? 'SHORTAGE_POSSIBLE' : 'NO_SHORTAGE_INDICATED', coverage_status: pred ? 'complete_ai' : 'incomplete',
+        items: pred ? [{ farm_id: pred.farm_id, basis_type: 'PREDICTION', basis_id: pred.prediction_id, quantity_kg: pred.predicted_quantity_kg }] : [],
+        review_note: input.review_note ?? '', verified_with_farmer: Boolean(input.verified_with_farmer),
+        is_stale: false, reviewed_by: 'USR-COORD', reviewed_at: now,
+      }
+      state.plans.unshift(plan)
+      return save(plan)
+    }
     case '/supply-risk-assessments': {
       allow('COORDINATOR')
       const input = body as RiskInput
-      amount(input.planned_demand_kg)
-      const { predicted_quantity_kg } = prediction(input.prediction_id)
-      const shortage_gap_kg = Number(Math.max(0, input.planned_demand_kg - predicted_quantity_kg).toFixed(4))
-      const result = {
-        ...input, predicted_quantity_kg, shortage_gap_kg, assessed_at: now,
-        status: shortage_gap_kg > 0 ? 'SHORTAGE_POSSIBLE' : 'NO_SHORTAGE_INDICATED',
+      const pred = state.predictions.find(p => p.prediction_id === input.prediction_id) ?? fail(404, 'Prediksi tidak ditemukan.')
+      const gap = Math.max(0, input.planned_demand_kg - pred.predicted_quantity_kg)
+      const res: Risk = {
+        assessment_id: createId('RISK'), prediction_id: input.prediction_id, predicted_quantity_kg: pred.predicted_quantity_kg,
+        planned_demand_kg: input.planned_demand_kg, shortage_gap_kg: gap,
+        status: gap > 0 ? 'SHORTAGE_POSSIBLE' : 'NO_SHORTAGE_INDICATED', assessed_at: now,
       }
-      state.risks = [result, ...state.risks.filter(row => row.prediction_id !== input.prediction_id)]
-      return save(result)
+      state.risks.unshift(res)
+      return save(res)
     }
     case '/approved-availability': {
       allow('COORDINATOR')
       const input = body as ApprovalInput
-      amount(input.approved_quantity_kg)
-      const sameCrop = (row: { farm_id: string; crop_id: string }) =>
-        row.farm_id === input.farm_id && row.crop_id === input.crop_id
-      const basisExists = input.basis_type === 'PREDICTION'
-        ? state.predictions.some(row => row.prediction_id === input.basis_id && sameCrop(row) && row.target_period === input.period)
-        : state.estimates.some(row => row.estimate_id === input.basis_id && sameCrop(row) && row.harvest_period === input.period)
-      if (!basisExists) fail(422, 'Referensi persetujuan tidak cocok dengan kebun, komoditas, atau periode.')
-      if (state.approvals.some(row => sameCrop(row) && row.period === input.period)) {
-        fail(409, 'Ketersediaan sudah disetujui. Gunakan penyesuaian alokasi untuk mengubah kuantitas.')
+      const res: Availability = {
+        ...input, availability_id: createId('AVL'), status: 'APPROVED', version: 1,
+        approved_by: 'USR-COORD', approved_at: now, member_allocations: [],
       }
-      const result: Availability = {
-        ...input, availability_id: createId('AVL'), status: 'APPROVED', version: 1, approved_by: 'COORD-001', approved_at: now,
-      }
-      state.approvals.unshift(result)
-      return save(result)
+      state.approvals.unshift(res)
+      return save(res)
     }
     case '/member-selections': {
       allow('MEMBER')
       if (!account.canSelect) fail(403, 'Paket ini tidak mencakup hak pilih.')
       const input = body as SelectionInput
-      const used = input.items.reduce((sum, row) => sum + row.quantity_kg, 0)
-      if (used <= 0 || used > 2 || new Set(input.items.map(row => row.availability_id)).size !== input.items.length) {
-        fail(422, 'Paket Pilih memiliki kuota 2 kg per minggu.')
-      }
-      for (const row of input.items) {
-        const a = approved(row.availability_id)
-        if (a.period !== input.period || a.version !== row.availability_version) {
-          fail(409, 'Ketersediaan sudah berubah. Muat ulang daftar sayuran.')
-        }
-        const reserved = state.selections.filter(selection => selection.member_id !== account.memberId)
-          .flatMap(selection => selection.items)
-          .reduce((sum, item) => sum + (item.availability_id === row.availability_id ? item.quantity_kg : 0), 0)
-        if (!(row.quantity_kg > 0) || row.quantity_kg > a.approved_quantity_kg - reserved) {
-          fail(422, 'Jumlah pilihan melebihi pasokan yang tersedia.')
-        }
-      }
-      const result = { ...input, selection_id: createId('SEL'), member_id: account.memberId!, status: 'accepted', recorded_at: now }
-      state.selections = [result, ...state.selections.filter(row => row.member_id !== account.memberId || row.period !== input.period)]
-      return save(result)
+      const res: Selection = { ...input, selection_id: createId('SEL'), member_id: account.memberId!, status: 'RECORDED', recorded_at: now }
+      state.selections.unshift(res)
+      return save(res)
     }
     case '/actual-harvests': {
       allow('COORDINATOR')
       const input = body as ActualInput
-      amount(input.actual_quantity_kg)
-      if (state.actuals.some(row => row.farm_id === input.farm_id && row.crop_id === input.crop_id && row.period === input.period)) {
-        fail(409, 'Hasil panen kebun dan komoditas ini sudah tercatat untuk periode tersebut.')
-      }
-      const result = { ...input, actual_harvest_id: createId('ACT'), status: 'CONFIRMED', confirmed_by: 'COORD-001', recorded_at: now }
-      state.actuals.unshift(result)
-      return save(result)
+      const res: Actual = { ...input, actual_harvest_id: createId('ACT'), status: 'CONFIRMED', confirmed_by: 'USR-COORD', recorded_at: now }
+      state.actuals.unshift(res)
+      return save(res)
     }
     case '/allocation-adjustments': {
       allow('COORDINATOR')
       const input = body as AllocationInput
-      const a = approved(input.availability_id)
-      amount(input.approved_quantity_kg)
-      if (a.version !== input.expected_version) fail(409, 'Versi ketersediaan telah berubah. Muat ulang sebelum menyimpan.')
-      if (input.actual_harvest_id && !state.actuals.some(row => row.actual_harvest_id === input.actual_harvest_id &&
-          row.farm_id === a.farm_id && row.crop_id === a.crop_id && row.period === a.period)) {
-        fail(422, 'ID panen aktual tidak cocok dengan ketersediaan.')
-      }
-      if (input.member_allocations.some(row => !Number.isFinite(row.quantity_kg) || row.quantity_kg < 0) ||
-          input.member_allocations.reduce((sum, row) => sum + row.quantity_kg, 0) - input.approved_quantity_kg > 1e-9) {
-        fail(422, 'Total alokasi melebihi kuantitas yang disetujui.')
-      }
-      const result = {
-        ...input, adjustment_id: createId('ADJ'), version: a.version + 1, approved_by: 'COORD-001', approved_at: now,
-      }
-      state.adjustments.unshift(result)
-      Object.assign(a, { version: result.version, approved_quantity_kg: result.approved_quantity_kg })
-      return save(result)
+      const avl = state.approvals.find(a => a.availability_id === input.availability_id) ?? fail(404, 'Ketersediaan tidak ditemukan.')
+      const res: Allocation = { ...input, adjustment_id: createId('ADJ'), version: avl.version + 1, approved_by: 'USR-COORD', approved_at: now }
+      avl.version = res.version
+      avl.approved_quantity_kg = res.approved_quantity_kg
+      avl.member_allocations = res.member_allocations
+      state.adjustments.unshift(res)
+      return save(res)
+    }
+    case '/package-receipts': {
+      allow('COORDINATOR')
+      const input = body as ReceiptInput
+      const res: Receipt = { receipt_id: createId('RCT'), member_id: input.member_id, period: input.period, received: input.confirmed, confirmed_by: 'USR-COORD', confirmed_at: now }
+      state.receipts = [res, ...state.receipts.filter(r => r.member_id !== input.member_id || r.period !== input.period)]
+      return save(res)
     }
     case '/member-feedback': {
       allow('MEMBER')
       const input = body as FeedbackInput
-      if (input.period !== demoPeriod) fail(422, 'Penerimaan paket belum tercatat untuk periode ini.')
-      const result = { ...input, feedback_id: createId('FDB'), member_id: account.memberId!, status: 'accepted', recorded_at: now }
-      state.feedback.unshift(result)
-      return save(result)
+      if (!state.receipts.some(r => r.member_id === account.memberId && r.period === input.period && r.received)) {
+        fail(409, 'Penerimaan paket belum dikonfirmasi oleh koordinator.')
+      }
+      const res: Feedback = { ...input, feedback_id: createId('FDB'), member_id: account.memberId!, status: 'RECORDED', recorded_at: now }
+      state.feedback.unshift(res)
+      return save(res)
     }
     default:
       return fail(404, 'Endpoint tidak ditemukan.')

@@ -109,3 +109,78 @@ Prototipe ditargetkan untuk mendemonstrasikan satu periode layanan dengan cakupa
 ## Kontributor
 
 Kelompok 9 (K-01) | II3120 Layanan Sistem dan Teknologi Informasi, Institut Teknologi Bandung, 2026.
+
+## Implementasi D3: backend, frontend, dan deployment lokal
+
+Backend menggunakan satu aplikasi FastAPI modular yang mengimplementasikan lima layanan logis SoaML. API-01 sampai API-12 berada di prefix `/api/v1`; dokumentasi kontrak ada di [`docs/api-contract.md`](docs/api-contract.md), traceability di [`docs/soa-traceability.md`](docs/soa-traceability.md), dan OpenAPI di [`docs/openapi.json`](docs/openapi.json). Data sintetik dan hasil model harus tetap diberi label.
+
+### Menjalankan demo lokal dengan Docker Compose
+
+1. Buat konfigurasi lokal dan ganti nilai rahasia untuk lingkungan Anda:
+
+```powershell
+Copy-Item .env.example .env
+Copy-Item frontend/.env.example frontend/.env.local
+```
+
+2. Jalankan dari root repository:
+
+```powershell
+docker compose up --build
+```
+
+Buka `http://127.0.0.1:8080`. Nginx menyajikan frontend dan meneruskan `/api/v1/` ke backend. API, PostgreSQL, broker lokal, dan worker tidak dipublikasikan ke port host. Migrasi Alembic berjalan sebelum API siap. Jangan gunakan nilai contoh untuk akses publik.
+
+Untuk backend langsung saat pengembangan, install dependensi dengan `python -m pip install -r backend/requirements.txt`, siapkan PostgreSQL atau SQLite khusus development, atur `DATABASE_URL` ke database development tersebut, lalu jalankan `python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000`. Untuk frontend Vite, `cd frontend; npm ci; npm run dev`; atur `VITE_API_BASE_URL=/api/v1` dan `API_PROXY_TARGET=http://127.0.0.1:8000` pada `.env.local`.
+
+### Kredensial demo dan role
+
+Login menggunakan username dan password. Bootstrap lokal membuat empat akun (`farmer`, `coordinator`, `member-eligible`, `member-regular`) dengan password acak dari variabel `AUTH_BOOTSTRAP_*` di file `.env` yang tidak dilacak Git. Password hanya dibaca saat akun pertama kali dibuat; ubah password sesudah login melalui menu Akun. Password disimpan sebagai hash Argon2id; browser menerima cookie sesi `HttpOnly`, `SameSite=Lax`, dan `Secure` saat production. Jangan kirim nilai `.env` ke chat atau commit. Login tidak mengizinkan pilihan role; role dan scope ditentukan di server. Farm demo adalah `FARM-01`, crop `SPINACH`, periode seed `2026-W48`. Akun anggota eligible adalah `MBR-001`, sedangkan paket reguler adalah `MBR-002`.
+
+### MQTT lokal dan HiveMQ yang sudah ada
+
+MQTT ingestion mati secara default. Untuk simulator terisolasi, isi `.env` dengan `MQTT_ENABLED=true`, `MQTT_HOST=mqtt`, `MQTT_FARM_ID=FARM-01`, `MQTT_DEVICE_ID=SYN-ESP32-01`, dan `MQTT_SOURCE=simulated_iot`, lalu jalankan `docker compose --profile local-mqtt up --build`. Kirim fixture hanya ke broker lokal:
+
+```powershell
+docker compose exec api python -m backend.app.mqtt_simulator --host mqtt
+```
+
+Jika broker berjalan di jaringan Compose, gunakan `--host mqtt` dari container backend/simulator. Jangan arahkan simulator ke broker publik.
+
+Mode HiveMQ memakai host `broker.hivemq.com`, TCP `1883`, topic persis `tani/sensor/lingkungan`, QoS 0, tanpa kredensial (konfigurasi sesuai teammate). Aktifkan hanya bila diperlukan dengan `MQTT_ENABLED=true`, `MQTT_FARM_ID` dan `MQTT_DEVICE_ID` yang telah dikonfigurasi. Payload BME280 terbaru memiliki `hum`; humidity opsional dan tidak diisi ketika tidak diterima. Firmware terbaru tidak mengirim device/block ID maupun timestamp, sehingga konfigurasi server mengikat topic ke demo farm/device dan backend mencatat waktu terima. Broker publik tidak memverifikasi sumber fisik, tidak terenkripsi, dan tidak menjamin pengiriman. Lihat [`docs/mqtt-contract.md`](docs/mqtt-contract.md).
+
+### Model AI yang ada dan penggantian kemudian
+
+Backend memuat hanya file lokal tepercaya dari `MODEL_PATH` (default image `/app/ai/models/model.joblib`) melalui `ai/src/predict.py`; runtime dipin ke scikit-learn 1.9.1 sesuai metadata model. Artifact saat ini bernama `rf-synthetic-v3`, berasal dari dataset sintetik dan bukan bukti akurasi kebun nyata. Ganti hanya melalui adapter predictor, setelah artifact baru tersedia, kontrak fitur/satuan dan dependensi diverifikasi. Atur path eksplisit, uji route dan konversi kg/m² ke kg total, simpan version/provenance, dan pertahankan respons `PREDICTION_UNAVAILABLE` serta persetujuan manual `MANUAL_ESTIMATE` saat model tidak kompatibel. Jangan latih atau mengganti model pada tugas ini.
+
+### Skenario Demo (`operational` & `walkthrough`)
+
+Untuk mengisi dataset demo (2 kebun: Kebun Ciburial & Kebun Cimenyan, 5 komoditas sayuran, 6 penanaman aktif, 6 anggota CSA, riwayat sensor 7 hari, dan periode evaluasi sebelumnya):
+
+```powershell
+# Skenario operasional (siap jelajah langsung)
+docker compose exec api python -m backend.app.seed --scenario operational --period 2026-W48 --reset-demo
+
+# Skenario walkthrough BPMN interaktif (belum ada persetujuan minggu aktif)
+docker compose exec api python -m backend.app.seed --scenario walkthrough --period 2026-W48 --reset-demo
+```
+
+Flag `--reset-demo` hanya membersihkan data demo dan **tidak** menghapus observasi MQTT `source=iot` maupun akun pengguna.
+
+Ilustrasi sayuran dibuat menggunakan fitur generasi gambar OpenAI (ChatGPT), 26 November 2026, untuk keperluan prototipe SmartHarvest. Ilustrasi bukan dokumentasi hasil panen aktual.
+
+### Pengujian dan status
+
+```powershell
+backend/.venv/Scripts/python.exe -m pytest backend/tests -q -p no:cacheprovider
+cd frontend; npm.cmd run build
+cd ..; docker compose --env-file .env.example config --quiet
+```
+
+Hasil pengujian dan batasan deployment ada di docs/d3-test-results.md serta docs/backend-implementation-status.md. Compose dan tunnel aktif; frontend dan API memakai satu hostname. HiveMQ tersambung, tetapi sensor fisik belum mengirim data pada jendela pemeriksaan. Dataset suite masih membutuhkan generate_dataset.py yang tidak ada di tree.
+
+### Cloudflare Tunnel
+
+Tunnel sudah aktif: satu hostname menyajikan frontend dan meneruskan `/api/v1/` ke backend. Password bootstrap hanya ada pada `.env` lokal yang Git-ignored; ganti masing-masing setelah login dan bagikan secara privat. Periksa status dengan `docker compose --env-file .env --profile tunnel ps`. Rollback akses publik dengan `docker compose --env-file .env --profile tunnel stop tunnel` lalu nonaktifkan hostname route/DNS di Cloudflare. Detail verifikasi ada pada docs/cloudflare-tunnel.md.
+
+Dokumentasi keamanan: [`docs/security-review.md`](docs/security-review.md) dan [`docs/security-threat-model.md`](docs/security-threat-model.md).

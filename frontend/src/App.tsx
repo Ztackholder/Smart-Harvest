@@ -1,42 +1,84 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { createApi } from './api'
+import { createApi, restoreSession, signIn, signOut, updatePassword } from './api'
 import { WorkspacePage } from './pages'
-import { accounts, initialPeriod, isSimulation, isValidPeriod, periodDates, periodPattern, shiftPeriod, type Account, type Estimate, type Prediction, type Role } from './contracts'
-import { Button, Chip, Field, Heading, Modal, Symbol, type SymbolName, value } from './ui'
-import { emptyActivity, readSimulation, type Activity } from './simulation'
-import type { Page, Workspace } from './workspace'
+import {
+  accounts, initialPeriod, isSimulation, isValidPeriod, periodDates, periodPattern, shiftPeriod, weekLabel,
+  type Account, type Catalog, type Role,
+} from './contracts'
+import { Button, Chip, Field, Modal, Symbol, type SymbolName, value } from './ui'
+import { simulationCatalog } from './simulation'
+import { emptyCatalog, type FarmFocus, type Page, type Workspace } from './workspace'
 
-const navigation: Record<Role, { page: Page; label: string; short: string; icon: SymbolName }[]> = {
-  COORDINATOR: [
-    { page: 'ringkasan', label: 'Ringkasan', short: 'Ringkasan', icon: 'square.grid.2x2' },
-    { page: 'prediksi', label: 'Prediksi panen', short: 'Prediksi', icon: 'chart.line.uptrend.xyaxis' },
-    { page: 'ketersediaan', label: 'Ketersediaan', short: 'Pasokan', icon: 'basket' },
-    { page: 'panen', label: 'Panen aktual', short: 'Aktual', icon: 'shippingbox' },
-  ],
-  FARMER: [
-    { page: 'observasi', label: 'Observasi kebun', short: 'Observasi', icon: 'leaf' },
-    { page: 'estimasi', label: 'Estimasi panen', short: 'Estimasi', icon: 'list.bullet.clipboard' },
-  ],
-  MEMBER: [
-    { page: 'sayuran', label: 'Sayuran tersedia', short: 'Sayuran', icon: 'basket' },
-    { page: 'alokasi', label: 'Pembaruan alokasi', short: 'Alokasi', icon: 'arrow.triangle.2.circlepath' },
-    { page: 'umpan-balik', label: 'Umpan balik', short: 'Umpan balik', icon: 'bubble.left' },
-  ],
+type NavItem = { page: Page; label: string; short: string; icon: SymbolName }
+
+function navForAccount(account: Account): NavItem[] {
+  if (account.role === 'COORDINATOR') {
+    return [
+      { page: 'ringkasan', label: 'Ringkasan', short: 'Ringkasan', icon: 'square.grid.2x2' },
+      { page: 'kebun', label: 'Kebun', short: 'Kebun', icon: 'sprout' },
+      { page: 'rencana', label: 'Rencana Panen', short: 'Rencana', icon: 'list.bullet.clipboard' },
+      { page: 'pemantauan', label: 'Pemantauan', short: 'Sensor', icon: 'antenna.radiowaves.left.and.right' },
+      { page: 'alokasi-realisasi', label: 'Alokasi & Realisasi', short: 'Alokasi', icon: 'shippingbox' },
+      { page: 'riwayat-evaluasi', label: 'Riwayat & Evaluasi', short: 'Riwayat', icon: 'history' },
+    ]
+  }
+  if (account.role === 'FARMER') {
+    return [
+      { page: 'kebun-saya', label: 'Kebun Saya', short: 'Kebun', icon: 'sprout' },
+      { page: 'estimasi', label: 'Estimasi Panen', short: 'Estimasi', icon: 'list.bullet.clipboard' },
+      { page: 'pemantauan', label: 'Pemantauan', short: 'Sensor', icon: 'antenna.radiowaves.left.and.right' },
+      { page: 'riwayat-petani', label: 'Riwayat', short: 'Riwayat', icon: 'history' },
+    ]
+  }
+  return [
+    { page: 'paket-saya', label: 'Paket Saya', short: 'Paket Saya', icon: 'basket' },
+    { page: 'pembaruan', label: 'Pembaruan', short: 'Pembaruan', icon: 'arrow.triangle.2.circlepath' },
+    { page: 'riwayat-anggota', label: 'Riwayat', short: 'Riwayat', icon: 'history' },
+  ]
 }
 
-const brand = <div className="brand">
-  <strong>SmartHarvest</strong>
-  <span>CSA Tani Sauyunan</span>
-</div>
+const pageMeta: Record<Page, { title: string; subtitle: (period: string) => string }> = {
+  ringkasan: { title: 'Ringkasan minggu ini', subtitle: p => weekLabel(p) },
+  kebun: { title: 'Kebun mitra', subtitle: () => 'Kondisi kebun dan perkiraan panen mingguan' },
+  'detail-kebun': { title: 'Detail kebun', subtitle: p => weekLabel(p) },
+  rencana: { title: 'Rencana panen mingguan', subtitle: p => `${weekLabel(p)} · Tentukan sayuran dan jumlah yang ditawarkan` },
+  pemantauan: { title: 'Pemantauan kebun', subtitle: p => weekLabel(p) },
+  'alokasi-realisasi': { title: 'Alokasi & realisasi', subtitle: p => weekLabel(p) },
+  'riwayat-evaluasi': { title: 'Riwayat & evaluasi', subtitle: p => `${weekLabel(p)} · Ringkasan siklus layanan` },
+  'kebun-saya': { title: 'Kebun saya', subtitle: p => `Panen ${weekLabel(p).toLowerCase()}` },
+  estimasi: { title: 'Estimasi panen', subtitle: p => weekLabel(p) },
+  'riwayat-petani': { title: 'Riwayat kebun', subtitle: p => weekLabel(p) },
+  'paket-saya': { title: 'Paket Saya', subtitle: () => 'CSA Tani Sauyunan' },
+  pilihan: { title: 'Pilih sayuran', subtitle: p => periodDates(p) },
+  pembaruan: { title: 'Pembaruan paket', subtitle: p => periodDates(p) },
+  'riwayat-anggota': { title: 'Riwayat & ulasan', subtitle: () => 'Paket mingguan Anda' },
+}
+
+const legacyHashRedirect: Record<string, Page> = {
+  prediksi: 'rencana',
+  ketersediaan: 'rencana',
+  panen: 'alokasi-realisasi',
+  observasi: 'kebun-saya',
+  sayuran: 'paket-saya',
+  alokasi: 'pembaruan',
+  'umpan-balik': 'riwayat-anggota',
+}
+
+function roleLabel(role: Role) {
+  if (role === 'COORDINATOR') return 'Koordinator'
+  if (role === 'FARMER') return 'Petani Mitra'
+  return 'CSA Tani Sauyunan'
+}
 
 function AccountForm({ account, onSave }: { account: Account | null; onSave: (account: Account) => void }) {
-  const [selected, setSelected] = useState(account?.role ?? 'COORDINATOR')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   if (isSimulation) return <div className="account-list">
     <p>Pilih peran untuk mencoba alur dengan data simulasi.</p>
     {accounts.map(option => <button type="button" key={option.memberId ?? option.role}
       className="account-option" onClick={() => onSave(option)}>
       <span><strong>{option.name}</strong>
-        {option.role === 'MEMBER' && <small>{option.canSelect ? 'Paket Pilih (2 kg)' : 'Paket reguler'}</small>}
+        {option.role === 'MEMBER' && <small>{option.canSelect ? 'Paket Pilih (2 kg)' : 'Paket Reguler'}</small>}
       </span>
       {account === option ? <Chip tone="good">Aktif</Chip> : <Symbol name="chevron.right" />}
     </button>)}
@@ -44,57 +86,65 @@ function AccountForm({ account, onSave }: { account: Account | null; onSave: (ac
   return <form className="form" onSubmit={(event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
-    const token = value(data, 'token')
-    if (!token) return
-    onSave({
-      role: selected, name: accounts.find(option => option.role === selected)!.name, token,
-      canSelect: selected === 'MEMBER' && data.get('can_select') === 'on',
-    })
+    setError('')
+    setBusy(true)
+    void signIn(value(data, 'username'), value(data, 'password'))
+      .then(onSave)
+      .catch(reason => setError(reason instanceof Error ? reason.message : 'Tidak dapat masuk. Coba lagi.'))
+      .finally(() => setBusy(false))
   }}>
-    <Field label="Peran akun">
-      <select value={selected} onChange={event => setSelected(event.target.value as Role)}>
-        <option value="COORDINATOR">Koordinator</option>
-        <option value="FARMER">Petani mitra</option>
-        <option value="MEMBER">Anggota CSA</option>
-      </select>
-    </Field>
-    <Field label="Token Bearer" name="token" type="password" required autoComplete="off"
-      pattern="[^\s]+" hint="Gunakan token yang diberikan tim backend." />
-    {selected === 'MEMBER' && <label className="check-label"><input name="can_select" type="checkbox" defaultChecked={account?.canSelect} /> Akun ini memiliki Paket Pilih</label>}
-    <Button type="submit">Buka ruang kerja</Button>
+    <Field label="Nama pengguna" name="username" required autoComplete="username" />
+    <Field label="Kata sandi" name="password" type="password" required autoComplete="current-password" />
+    {error && <p className="field-error" role="alert">{error}</p>}
+    <Button type="submit" disabled={busy}>{busy ? 'Memproses…' : 'Masuk'}</Button>
   </form>
 }
 
-function PeriodForm({ period, onSave }: { period: string; onSave: (period: string) => void }) {
-  const [draft, setDraft] = useState(period)
+function PasswordForm({ account, onDone }: { account: Account; onDone: () => void }) {
   const [error, setError] = useState('')
-  const selected = draft.trim()
-  const valid = isValidPeriod(selected)
-  const previous = shiftPeriod(valid ? selected : period, -1)
-  const next = shiftPeriod(valid ? selected : period, 1)
-  const updateDraft = (target: string) => {
-    setDraft(target.toUpperCase())
+  const [saved, setSaved] = useState(false)
+  return <form className="form" onSubmit={(event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
     setError('')
-  }
+    void updatePassword(value(data, 'current_password'), value(data, 'new_password'), account.csrfToken ?? '')
+      .then(() => setSaved(true))
+      .catch(reason => setError(reason instanceof Error ? reason.message : 'Kata sandi tidak dapat diperbarui.'))
+  }}>
+    <Field label="Kata sandi saat ini" name="current_password" type="password" required autoComplete="current-password" />
+    <Field label="Kata sandi baru" name="new_password" type="password" required minLength={16} maxLength={256}
+      autoComplete="new-password" hint="Gunakan minimal 16 karakter." />
+    {error && <p className="field-error" role="alert">{error}</p>}
+    {saved ? <><p role="status">Kata sandi diperbarui. Masuk kembali dengan kata sandi baru.</p><Button onClick={onDone}>Selesai</Button></>
+      : <Button type="submit">Perbarui kata sandi</Button>}
+  </form>
+}
+
+function PeriodForm({ period, availablePeriods, onSave }: {
+  period: string; availablePeriods: string[]; onSave: (period: string) => void
+}) {
+  const [draft, setDraft] = useState(period)
+  const previous = shiftPeriod(draft, -1)
+  const next = shiftPeriod(draft, 1)
+  const options = [...new Set([draft, ...availablePeriods, initialPeriod])].filter(isValidPeriod).sort().reverse()
   return <form className="form" onSubmit={event => {
     event.preventDefault()
-    if (!valid) {
-      setError('Minggu ISO tidak tersedia pada tahun tersebut.')
-      return
-    }
-    onSave(selected)
+    onSave(draft)
   }}>
     <div className="period-stepper" role="group" aria-label="Geser minggu layanan">
       <Button variant="secondary" icon="chevron.left" aria-label="Minggu sebelumnya"
-        disabled={!isValidPeriod(previous)} onClick={() => updateDraft(previous)} />
-      <output className="period-range" aria-live="polite">{valid ? periodDates(selected) : 'Minggu belum valid'}</output>
+        disabled={!isValidPeriod(previous)} onClick={() => setDraft(previous)} />
+      <output className="period-range" aria-live="polite">
+        {weekLabel(draft)} · {periodDates(draft, true)}
+      </output>
       <Button variant="secondary" icon="chevron.right" aria-label="Minggu berikutnya"
-        disabled={!isValidPeriod(next)} onClick={() => updateDraft(next)} />
+        disabled={!isValidPeriod(next)} onClick={() => setDraft(next)} />
     </div>
-    <Field label="Minggu layanan (ISO)" name="period" placeholder="2026-W46" value={draft}
-      pattern={periodPattern} required aria-invalid={error ? true : undefined}
-      aria-describedby={error ? 'period-error' : undefined} onChange={event => updateDraft(event.target.value)} />
-    {error && <p id="period-error" role="alert" className="field-error">{error}</p>}
+    <Field label="Pilih minggu layanan">
+      <select value={draft} onChange={e => setDraft(e.target.value)}>
+        {options.map(p => <option key={p} value={p}>{weekLabel(p)} ({periodDates(p, true)})</option>)}
+      </select>
+    </Field>
     <Button type="submit">Terapkan periode</Button>
   </form>
 }
@@ -104,119 +154,201 @@ function WorkspaceView({ account, onAccount, onExit, period, setPeriod }: {
   period: string; setPeriod: (period: string) => void
 }) {
   const [hash, setHash] = useState(window.location.hash.slice(1))
+  const [focus, setFocus] = useState<FarmFocus>()
   const [revision, setRevision] = useState(0)
-  const [activity, setActivity] = useState<Activity>(() => isSimulation ? readSimulation() : emptyActivity)
+  const [catalog, setCatalog] = useState<Catalog>(() => isSimulation ? simulationCatalog : emptyCatalog)
   const [dialog, setDialog] = useState<'account' | 'period'>()
-  const [proposal, setProposal] = useState<Prediction | Estimate>()
-  const [predictionId, setPredictionId] = useState<string>()
-  const nav = navigation[account.role]
-  const page = nav.find(item => item.page === hash)?.page ?? nav[0].page
+  const nav = useMemo(() => navForAccount(account), [account])
+  const normalizedHash = legacyHashRedirect[hash] ?? hash
+  const validPages = new Set<Page>([
+    ...nav.map(n => n.page),
+    ...(account.role === 'COORDINATOR' ? ['detail-kebun' as const] : []),
+    ...(account.role === 'MEMBER' && account.canSelect ? ['pilihan' as const] : []),
+  ])
+  const page: Page = validPages.has(normalizedHash as Page) ? (normalizedHash as Page) : nav[0].page
   const main = useRef<HTMLElement>(null)
-  const previousPage = useRef(page)
   const api = useMemo(() => createApi(account), [account])
-  const go = useCallback((target: Page) => { window.location.hash = target; setHash(target) }, [])
-  const openPrediction = useCallback((id?: string) => { setPredictionId(id); go('prediksi') }, [go])
-  const propose = (basis: Prediction | Estimate) => {
-    setProposal(basis)
-    if ('target_period' in basis) setPeriod(basis.target_period)
-    else setPeriod(basis.harvest_period)
-    go('ketersediaan')
+
+  const go = useCallback((target: Page, nextFocus?: FarmFocus) => {
+    if (nextFocus) setFocus(nextFocus)
+    window.location.hash = target
+    setHash(target)
+  }, [])
+  const refresh = useCallback(() => setRevision(n => n + 1), [])
+
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash.slice(1))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  useEffect(() => {
+    let active = true
+    api.catalog().then(data => { if (active) setCatalog(data) }).catch(() => undefined)
+    return () => { active = false }
+  }, [api])
+
+  const work: Workspace = { account, api, period, catalog, revision, refresh, go, focus, onAuthExpired: onExit }
+  const meta = pageMeta[page]
+  const showDemoBadge = isSimulation || catalog.farms.some(f => f.synthetic)
+  const availablePeriods = catalog.periods.length ? catalog.periods : [period]
+
+  // Member mobile-first layout (09-paket-saya-pilih.png & 10-paket-saya-reguler.png)
+  if (account.role === 'MEMBER') {
+    return <div className="member-shell">
+      <a href="#konten" className="skip-link">Lewati ke konten</a>
+      <header className="member-header">
+        <div className="member-header-inner">
+          <div>
+            <span className="member-brand">SmartHarvest</span>
+            <h1>{meta.title}</h1>
+            <span className="member-sub">CSA Tani Sauyunan</span>
+          </div>
+          <div className="member-header-actions">
+            {showDemoBadge && <Chip tone="warn">Mode demo</Chip>}
+            <button type="button" className="period-pill period-pill--dark" onClick={() => setDialog('period')}>
+              {periodDates(period, true)}
+            </button>
+            <button type="button" className="icon-btn" aria-label="Akun" onClick={() => setDialog('account')}>
+              <Symbol name="person.crop.circle" />
+            </button>
+          </div>
+        </div>
+      </header>
+      <main id="konten" ref={main} className="member-main" tabIndex={-1}>
+        <WorkspacePage key={`${page}:${period}`} page={page} work={work} />
+      </main>
+      <nav className="member-bottom-nav" aria-label="Navigasi anggota">
+        {nav.map(item => {
+          const active = item.page === page || (item.page === 'paket-saya' && page === 'pilihan')
+          return <a key={item.page} href={`#${item.page}`}
+            aria-current={active ? 'page' : undefined}
+            onClick={e => { e.preventDefault(); go(item.page) }}>
+            <Symbol name={item.icon} />
+            <span>{item.short}</span>
+          </a>
+        })}
+      </nav>
+      {dialog === 'period' && <Modal title="Pilih periode" onClose={() => setDialog(undefined)}>
+        <PeriodForm period={period} availablePeriods={availablePeriods} onSave={p => { setPeriod(p); setDialog(undefined) }} />
+      </Modal>}
+      {dialog === 'account' && <Modal title={isSimulation ? 'Ganti peran' : 'Akun'} onClose={() => setDialog(undefined)}>
+        {isSimulation ? <AccountForm account={account} onSave={next => { setDialog(undefined); onAccount(next) }} /> : <>
+          <p>{account.username} · {account.name}</p>
+          <PasswordForm account={account} onDone={onExit} />
+          <Button variant="text" onClick={onExit}>Keluar</Button>
+        </>}
+      </Modal>}
+    </div>
   }
-  const refresh = useCallback(() => {
-    setRevision(value => value + 1)
-    if (isSimulation) setActivity(readSimulation())
-  }, [])
-  const remember = useCallback(<K extends keyof Activity>(key: K, row: Activity[K][number]) => {
-    if (isSimulation) { refresh(); return }
-    const ids = { observations: 'observation_id', predictions: 'prediction_id', estimates: 'estimate_id',
-      risks: 'prediction_id', approvals: 'availability_id', actuals: 'actual_harvest_id' } as const
-    const rowId = (entry: Activity[K][number]) => (entry as unknown as Record<string, string>)[ids[key]]
-    setActivity(current => ({ ...current, [key]: [row, ...current[key].filter(entry => rowId(entry) !== rowId(row))] }))
-    if (key === 'approvals') refresh()
-  }, [refresh])
-  const work: Workspace = { account, api, period, activity, revision, refresh, remember, go, proposal, propose, predictionId, openPrediction }
 
-  useEffect(() => {
-    const receiveHash = () => setHash(window.location.hash.slice(1))
-    window.addEventListener('hashchange', receiveHash)
-    return () => window.removeEventListener('hashchange', receiveHash)
-  }, [])
-  useEffect(() => {
-    if (page === previousPage.current) return
-    previousPage.current = page
-    window.scrollTo(0, 0)
-    main.current?.querySelector('h1')?.focus({ preventScroll: true })
-  }, [page])
-  useEffect(() => {
-    if (!isSimulation) return
-    const sync = (event: StorageEvent) => { if (event.key === 'smartharvest.simulation.v1' || !event.key) refresh() }
-    window.addEventListener('storage', sync)
-    return () => window.removeEventListener('storage', sync)
-  }, [refresh])
-
-  const navLinks = (compact = false) => nav.map(item => <a key={item.page} href={`#${item.page}`}
-    aria-current={item.page === page ? 'page' : undefined}
-    onClick={() => { if (item.page === 'ketersediaan' && page !== 'ketersediaan') setProposal(undefined) }}>
-    <Symbol name={item.icon} />{compact ? item.short : item.label}
-  </a>)
-
-  return <div className="shell">
-    <a href="#konten" className="skip-link" onClick={event => { event.preventDefault(); main.current?.focus() }}>Lewati ke konten</a>
-    <header>
-      <div className="masthead">
-        <div className="masthead-inner">
-          {brand}
-          <nav className="desktop-nav" aria-label="Navigasi utama">{navLinks()}</nav>
-          <Button variant="secondary" className="account-trigger" icon="person.crop.circle" aria-haspopup="dialog"
-            onClick={() => setDialog('account')}>{account.name}<Symbol name="chevron.down" /></Button>
-        </div>
+  // Coordinator & Farmer persistent sidebar layout (00–08 references)
+  return <div className="app-shell">
+    <a href="#konten" className="skip-link">Lewati ke konten</a>
+    <aside className="sidebar" aria-label="Navigasi utama">
+      <div className="sidebar-brand">
+        <strong>SmartHarvest</strong>
+        <span>{roleLabel(account.role)}</span>
       </div>
-      <div className="workspace-strip">
-        <div className="workspace-strip-inner">
-          <Button className="period-trigger" variant="text" icon="calendar" aria-haspopup="dialog"
-            aria-label={`Ubah periode ${period}`} onClick={() => setDialog('period')}><span>Periode</span> <strong>{period}</strong></Button>
-          {isSimulation && <span className="simulation-label">Data simulasi</span>}
-        </div>
+      <nav className="sidebar-nav">
+        {nav.map(item => {
+          const active = item.page === page || (item.page === 'kebun' && page === 'detail-kebun')
+          return <a key={item.page} href={`#${item.page}`} aria-current={active ? 'page' : undefined}
+            onClick={e => { e.preventDefault(); go(item.page) }}>
+            {item.label}
+          </a>
+        })}
+      </nav>
+      <div className="sidebar-footer">
+        <button type="button" className="sidebar-account" onClick={() => setDialog('account')}>
+          <span>{account.username ?? account.name}</span>
+          <small>Akun & kata sandi</small>
+        </button>
+        <button type="button" className="sidebar-logout" onClick={onExit}>Keluar</button>
       </div>
-    </header>
-    <main id="konten" ref={main} className="main" tabIndex={-1}><WorkspacePage key={`${page}:${period}`} page={page} work={work} /></main>
-    <nav className="mobile-nav" aria-label="Navigasi utama">{navLinks(true)}</nav>
+    </aside>
+
+    <div className="workspace-area">
+      <header className="workspace-header">
+        <div>
+          <h1 tabIndex={-1}>{meta.title}</h1>
+          <p className="muted-meta">{meta.subtitle(period)}</p>
+        </div>
+        <div className="toolbar-group">
+          {showDemoBadge && <Chip tone="warn">Mode demo</Chip>}
+          <button type="button" className="period-pill" aria-haspopup="dialog" onClick={() => setDialog('period')}>
+            {periodDates(period, true)}
+          </button>
+        </div>
+      </header>
+      <main id="konten" ref={main} className="workspace-main" tabIndex={-1}>
+        <WorkspacePage key={`${page}:${period}:${focus?.farmId ?? ''}:${focus?.cropId ?? ''}`} page={page} work={work} />
+      </main>
+    </div>
+
+    <nav className="mobile-bottom-nav" aria-label="Navigasi mobile">
+      {nav.map(item => {
+        const active = item.page === page || (item.page === 'kebun' && page === 'detail-kebun')
+        return <a key={item.page} href={`#${item.page}`} aria-current={active ? 'page' : undefined}
+          onClick={e => { e.preventDefault(); go(item.page) }}>
+          <Symbol name={item.icon} />
+          <span>{item.short}</span>
+        </a>
+      })}
+    </nav>
+
     {dialog === 'period' && <Modal title="Pilih periode" onClose={() => setDialog(undefined)}>
-      <PeriodForm period={period} onSave={target => {
-        if (target !== period) {
-          setPeriod(target)
-          setProposal(undefined)
-          setPredictionId(undefined)
-        }
-        setDialog(undefined)
-      }} />
+      <PeriodForm period={period} availablePeriods={availablePeriods} onSave={p => { setPeriod(p); setDialog(undefined) }} />
     </Modal>}
-    {dialog === 'account' && <Modal title={isSimulation ? 'Ganti peran' : 'Akun REST API'} onClose={() => setDialog(undefined)}>
-      <AccountForm account={account} onSave={next => {
-        setDialog(undefined)
-        if (next !== account) onAccount(next)
-      }} />
-      {!isSimulation && <Button variant="text" onClick={onExit}>Keluar dari sesi</Button>}
+    {dialog === 'account' && <Modal title={isSimulation ? 'Ganti peran' : 'Akun'} onClose={() => setDialog(undefined)}>
+      {isSimulation ? <AccountForm account={account} onSave={next => { setDialog(undefined); onAccount(next) }} /> : <>
+        <p>{account.username} · {account.name}</p>
+        <PasswordForm account={account} onDone={onExit} />
+        <Button variant="text" onClick={onExit}>Keluar</Button>
+      </>}
     </Modal>}
   </div>
 }
 
 export function App() {
   const [period, setPeriod] = useState(initialPeriod)
-  const [session, setSession] = useState({ account: isSimulation ? accounts[0] : null, key: 0 } as {
-    account: Account | null; key: number
+  const [authLoading, setAuthLoading] = useState(!isSimulation)
+  const [session, setSession] = useState<{ account: Account | null; key: number }>({
+    account: isSimulation ? accounts[0] : null,
+    key: 0,
   })
+  useEffect(() => {
+    if (isSimulation) return
+    let active = true
+    void restoreSession()
+      .then(account => { if (active) setSession(cur => ({ account, key: cur.key + 1 })) })
+      .catch(() => undefined)
+      .finally(() => { if (active) setAuthLoading(false) })
+    return () => { active = false }
+  }, [])
   const start = (account: Account) => {
-    const previous = session.account
-    if (previous?.role !== account.role) window.location.hash = navigation[account.role][0].page
-    setSession(current => ({ account, key: current.key + 1 }))
+    const first = navForAccount(account)[0].page
+    if (session.account?.role !== account.role) window.location.hash = first
+    setSession(cur => ({ account, key: cur.key + 1 }))
+  }
+  const exit = () => {
+    const token = session.account?.csrfToken
+    if (!isSimulation && token) {
+      void signOut(token).catch(() => undefined).finally(() => setSession(cur => ({ account: null, key: cur.key + 1 })))
+    } else {
+      setSession(cur => ({ account: null, key: cur.key + 1 }))
+    }
   }
 
-  if (session.account) return <WorkspaceView key={session.key} account={session.account} onAccount={start} period={period} setPeriod={setPeriod}
-    onExit={() => setSession(current => ({ account: null, key: current.key + 1 }))} />
+  if (session.account) {
+    return <WorkspaceView key={session.key} account={session.account} onAccount={start} period={period} setPeriod={setPeriod} onExit={exit} />
+  }
+  if (authLoading) return <main className="connect"><div className="login-brand"><strong>SmartHarvest</strong><span>CSA Tani Sauyunan</span></div><p role="status">Memeriksa sesi…</p></main>
   return <main className="connect">
-    {brand}
-    <Heading title="Hubungkan akun" description="Masuk ke ruang kerja SmartHarvest dengan token REST API." />
-    <AccountForm onSave={start} account={null} />
+    <div className="login-brand"><strong>SmartHarvest</strong><span>CSA Tani Sauyunan</span></div>
+    <div className="card">
+      <h1 className="login-title">Masuk ke SmartHarvest</h1>
+      <p className="muted-meta">Gunakan nama pengguna dan kata sandi akun Anda.</p>
+      <AccountForm onSave={start} account={null} />
+    </div>
   </main>
 }

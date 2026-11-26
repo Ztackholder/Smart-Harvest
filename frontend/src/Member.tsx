@@ -1,106 +1,410 @@
-import { useCallback, useState } from 'react'
-import { cropName, dateTime, isSimulation, kg, periodDates, type Availability, type Selection } from './contracts'
-import { Button, Chip, CopyId, Empty, Field, Heading, Notice, Panel, QueryMessage, number, useAction, useQuery, value } from './ui'
+import { useState } from 'react'
+import { cropImage, cropName, dateTime, kg, periodDates } from './contracts'
+import { Button, Card, Chip, Empty, Field, Notice, ProgressBar, Symbol, useAction, useResource, value } from './ui'
 import type { Workspace } from './workspace'
 
-function SelectionForm({ work, rows, reload }: { work: Workspace; rows: Availability[]; reload: () => void }) {
-  const action = useAction()
-  const [amounts, setAmounts] = useState<Record<string, string>>({})
-  const [saved, setSaved] = useState<Selection>()
-  const total = rows.reduce((sum, row) => sum + (Number(amounts[row.availability_id]) || 0), 0)
-  const quota = isSimulation ? 2 : undefined
-  const excess = quota === undefined ? 0 : total - quota
-  const quotaMessage = quota === undefined || excess <= 0 ? '' : excess < 0.01
-    ? `Kurangi pilihan agar total paling banyak ${kg(quota)} kg.`
-    : `Kurangi pilihan sebanyak ${kg(excess)} kg.`
-  return <form className="form" onSubmit={action.submit(async data => {
-    setSaved(undefined)
-    const items = rows.flatMap(row => {
-      const quantity_kg = number(data, row.availability_id)
-      return quantity_kg > 0 ? [{ availability_id: row.availability_id, availability_version: row.version, quantity_kg }] : []
-    })
-    if (!items.length) throw new Error('Masukkan berat untuk setidaknya satu sayuran.')
-    if (quotaMessage) throw new Error(quotaMessage)
-    setSaved(await work.api.post('/member-selections', { period: work.period, items }))
-  })}>
-    <ul className="records member-produce">
-      {rows.map(row => <li key={row.availability_id}>
-        <div><h3>{cropName(row.crop_id)}</h3><p>{kg(row.approved_quantity_kg)} kg tersedia dari {row.farm_id}</p></div>
-        <Field label={`Pilihan ${cropName(row.crop_id)} (kg)`} name={row.availability_id} type="number" min={0}
-          max={row.approved_quantity_kg} step="any" placeholder="0" disabled={action.pending}
-          value={amounts[row.availability_id] ?? ''} onChange={event => {
-            setSaved(undefined)
-            setAmounts(current => ({ ...current, [row.availability_id]: event.target.value }))
-          }} />
-      </li>)}
-    </ul>
-    <div className="selection-total"><span>Total pilihan</span><strong>{kg(total)} {quota !== undefined && `/ ${kg(quota)}`} kg</strong></div>
-    {action.error && <Notice tone="error">{action.error}
-      {action.status === 409 && <Button variant="text" onClick={reload}>Muat ulang ketersediaan</Button>}
-    </Notice>}
-    {saved && <Notice tone="good">Pilihan tersimpan. <CopyId value={saved.selection_id} /></Notice>}
-    {quotaMessage && <Notice tone="warn">{quotaMessage}</Notice>}
-    <Button type="submit" disabled={action.pending || total <= 0 || Boolean(quotaMessage)}>
-      {action.pending ? 'Mengirim…' : 'Kirim pilihan'}
-    </Button>
-  </form>
-}
-
-export function MemberAvailability({ work }: { work: Workspace }) {
-  const load = useCallback(() => work.api.availability(work.period), [work.api, work.period])
-  const response = useQuery(load)
-  const rows = response.data?.items.filter(item => item.status === 'APPROVED')
-  return <div className="stack member-sheet">
-    <Heading title="Sayuran tersedia" description={periodDates(work.period)}>
-      <Chip tone={work.account.canSelect ? 'good' : 'neutral'}>{work.account.canSelect ? 'Paket Pilih' : 'Paket reguler'}</Chip>
-    </Heading>
-    <Panel title="Ketersediaan resmi"
-      description={work.account.canSelect ? undefined : 'Alokasi Paket Reguler ditetapkan oleh koordinator.'}>
-      <QueryMessage {...response} />
-      {rows && (rows.length ? work.account.canSelect ?
-        <SelectionForm work={work} rows={rows} reload={response.reload} /> :
-        <ul className="records">{rows.map(row => <li key={row.availability_id}>
-          <div className="item-top"><strong>{cropName(row.crop_id)}</strong><strong>{kg(row.approved_quantity_kg)} kg</strong></div>
-          <p>{row.farm_id}</p>
-        </li>)}</ul> : <Empty>Koordinator belum memublikasikan sayuran untuk periode ini.</Empty>)}
-    </Panel>
+function CropThumb({ cropId, large = false }: { cropId: string; large?: boolean }) {
+  const src = cropImage(cropId)
+  const [failed, setFailed] = useState(false)
+  if (src && !failed) {
+    return <img className={large ? 'crop-card-img' : 'crop-thumb'} src={src} alt={`Ilustrasi ${cropName(cropId)}`} onError={() => setFailed(true)} />
+  }
+  return <div className={`${large ? 'crop-card-img' : 'crop-thumb'} crop-thumb--fallback`} aria-hidden="true">
+    <Symbol name="leaf" />
   </div>
 }
 
-export function MemberUpdates({ work }: { work: Workspace }) {
-  const load = useCallback(() => work.api.updates(work.period), [work.api, work.period])
-  const response = useQuery(load)
-  return <div className="stack member-sheet">
-    <Heading title="Pembaruan alokasi" description={periodDates(work.period)} />
-    <div className="stack member-updates">
-      {response.status === 404 || response.status === 501
-        ? <Notice>Pembaruan alokasi belum tersedia. <Button variant="text" onClick={response.reload}>Coba lagi</Button></Notice>
-        : <QueryMessage {...response} />}
-      {response.data && (response.data.items.length ? <ul className="records">{response.data.items.map(row =>
-        <li key={row.adjustment_id}>
-          <div className="item-top"><strong>{row.crop_id ? cropName(row.crop_id) : row.availability_id}</strong><strong>{kg(row.quantity_kg)} kg</strong></div>
-          <p>{row.reason}</p><p>Versi {row.version}, {dateTime(row.approved_at)}</p>
-        </li>)}</ul> : <Empty>Belum ada perubahan alokasi untuk paketmu.</Empty>)}
+/* --- 09 & 10. PAKET SAYA (OVERVIEW) --- */
+export function MemberHome({ work }: { work: Workspace }) {
+  const query = useResource(
+    signal => work.api.memberOverview(work.period, signal),
+    [work.api, work.period, work.revision],
+    work.onAuthExpired,
+  )
+  const data = query.data
+  if (query.loading && !data) return <p className="empty" role="status">Memuat informasi paket…</p>
+
+  const member = data?.member
+  const eligible = member?.eligible ?? Boolean(work.account.canSelect)
+  const quota = member?.quota_kg ?? (eligible ? 2 : 0)
+  const availability = data?.availability ?? []
+  const selection = data?.selection ?? null
+  const step = data?.progress_step ?? 'waiting_publication'
+
+  const steps = eligible
+    ? [
+        { key: 'published', label: 'Pilihan dibuka' },
+        { key: 'selected', label: 'Dikonfirmasi' },
+        { key: 'allocated', label: 'Disiapkan' },
+        { key: 'received', label: 'Diterima' },
+      ]
+    : [
+        { key: 'published', label: 'Penawaran dibuka' },
+        { key: 'selected', label: 'Dijadwalkan' },
+        { key: 'allocated', label: 'Disiapkan' },
+        { key: 'received', label: 'Diterima' },
+      ]
+
+  const stepIndex =
+    step === 'feedback_sent' || step === 'received' ? 3 :
+    step === 'allocated' ? 2 :
+    step === 'selected' ? 1 :
+    step === 'published' ? 0 : -1
+
+  const statusText =
+    step === 'feedback_sent' || step === 'received' ? 'Paket diterima' :
+    step === 'allocated' ? 'Paket sedang disiapkan' :
+    step === 'selected' ? 'Pilihan dikonfirmasi' :
+    step === 'published' ? (eligible ? 'Pilihan sayuran dibuka' : 'Menunggu penjadwalan koordinator') :
+    'Pilihan sayuran minggu ini belum dibuka.'
+
+  const uniqueCrops = [...new Map(availability.map(a => [a.crop_id, a])).values()]
+
+  return <div className="stack">
+    {query.error && <Notice tone="error">{query.error} <Button variant="text" onClick={query.reload}>Muat ulang</Button></Notice>}
+
+    <div className="subscription-card">
+      <span className="kpi-label">Langganan aktif · {member?.name ?? work.account.name}</span>
+      <strong className="metric-large">{member?.package_name ?? (eligible ? 'Paket Pilih' : 'Paket Reguler')}</strong>
+      <p>{eligible ? `Kuota mingguan ${kg(quota)} kg` : 'Isi paket ditentukan oleh koordinator'}</p>
     </div>
+
+    <Card title="Status minggu ini" subtitle={periodDates(work.period)}>
+      <p className="text-good"><strong>{statusText}</strong></p>
+      <ol className="progress-steps progress-steps--4" aria-label="Tahapan paket mingguan">
+        {steps.map((s, idx) => {
+          const done = stepIndex >= idx
+          return <li key={s.key} className={done ? 'progress-step progress-step--done' : 'progress-step'}>
+            <span className="progress-dot" aria-hidden="true" />
+            <span>{s.label}</span>
+          </li>
+        })}
+      </ol>
+    </Card>
+
+    {eligible ? (
+      <Card title="Paket minggu ini">
+        {selection ? <>
+          <ul className="simple-list">
+            {selection.items.map(it => {
+              const avl = availability.find(a => a.availability_id === it.availability_id)
+              return <li key={it.availability_id}>
+                <div className="row-between">
+                  <strong>{avl ? cropName(avl.crop_id) : 'Sayuran'}</strong>
+                  <strong className="tabular">{kg(it.quantity_kg)} kg</strong>
+                </div>
+              </li>
+            })}
+          </ul>
+          <Button variant="secondary" className="btn-full" onClick={() => work.go('pembaruan')}>Lihat pembaruan paket</Button>
+        </> : availability.length ? <>
+          <p className="muted-meta">{uniqueCrops.length} jenis sayuran tersedia untuk dipilih minggu ini.</p>
+          <Button className="btn-full" onClick={() => work.go('pilihan')}>Pilih sayuran</Button>
+        </> : <Empty>Pilihan sayuran minggu ini belum dibuka.</Empty>}
+      </Card>
+    ) : (
+      <section className="stack-tight">
+        <div>
+          <h2 className="member-section-title">Sayuran minggu ini</h2>
+          <p className="muted-meta">Isi paket ditentukan oleh koordinator</p>
+        </div>
+        {!availability.length ? (
+          <Card><Empty>Pilihan sayuran minggu ini belum dibuka.</Empty></Card>
+        ) : (
+          <div className="stack-tight">
+            {availability.map(row => (
+              <div key={row.availability_id} className="produce-card">
+                <div className="produce-info">
+                  <CropThumb cropId={row.crop_id} />
+                  <div>
+                    <strong>{cropName(row.crop_id)}</strong>
+                    <span className="muted-meta">
+                      {row.own_allocation_kg !== undefined
+                        ? `Paket Anda: ${kg(row.own_allocation_kg)} kg`
+                        : 'Menunggu pembagian koordinator'}
+                    </span>
+                  </div>
+                </div>
+                {row.own_allocation_kg !== undefined && <Chip tone="good">{kg(row.own_allocation_kg)} kg</Chip>}
+              </div>
+            ))}
+            <Button className="btn-full" onClick={() => work.go('pembaruan')}>Lihat pembaruan</Button>
+          </div>
+        )}
+      </section>
+    )}
   </div>
 }
 
-export function MemberFeedback({ work }: { work: Workspace }) {
-  const action = useAction()
-  const [saved, setSaved] = useState('')
-  return <div className="stack member-sheet">
-    <Heading title="Umpan balik" description="Kirim setelah paket sayuran diterima." />
-    <form className="form" onSubmit={action.submit(async data => {
-      setSaved('')
-      const comment = value(data, 'comment')
-      if (!comment) throw new Error('Tuliskan umpan balik sebelum mengirim.')
-      const result = await work.api.post('/member-feedback', { period: work.period, comment })
-      setSaved(result.feedback_id)
-    })}>
-      <Field label="Komentar tentang paket"><textarea name="comment" rows={5} required maxLength={2000} /></Field>
-      {action.error && <Notice tone="error">{action.error}</Notice>}
-      {saved && <Notice tone="good">Umpan balik terkirim. <CopyId value={saved} /></Notice>}
-      <Button type="submit" disabled={action.pending}>{action.pending ? 'Mengirim…' : 'Kirim umpan balik'}</Button>
-    </form>
+/* --- PILIH SAYURAN (NESTED IMAGE CATALOG FOR ELIGIBLE MEMBERS) --- */
+export function MemberSelectionCatalog({ work }: { work: Workspace }) {
+  const query = useResource(
+    signal => work.api.memberOverview(work.period, signal),
+    [work.api, work.period, work.revision],
+    work.onAuthExpired,
+  )
+  const selectAction = useAction()
+  const [amounts, setAmounts] = useState<Record<string, number>>({})
+  const [reviewing, setReviewing] = useState(false)
+  const [savedMsg, setSavedMsg] = useState('')
+
+  const data = query.data
+  if (query.loading && !data) return <p className="empty" role="status">Memuat katalog sayuran…</p>
+
+  const member = data?.member
+  const eligible = member?.eligible ?? Boolean(work.account.canSelect)
+  const quota = member?.quota_kg ?? 2
+  const availability = data?.availability ?? []
+  const selection = data?.selection ?? null
+
+  if (!eligible) {
+    return <Card title="Pilih sayuran">
+      <Empty>Paket Reguler tidak mencakup pemilihan sayuran mandiri. Isi paket ditentukan oleh koordinator.</Empty>
+    </Card>
+  }
+
+  const totalSelected = availability.reduce((sum, row) => sum + (amounts[row.availability_id] ?? 0), 0)
+  const quotaExceeded = quota > 0 && totalSelected - quota > 1e-6
+  const selectedItems = availability
+    .filter(row => (amounts[row.availability_id] ?? 0) > 0)
+    .map(row => ({ row, qty: amounts[row.availability_id] }))
+
+  const adjustQty = (avlId: string, maxStock: number, delta: number) => {
+    setSavedMsg('')
+    setAmounts(prev => {
+      const current = prev[avlId] ?? 0
+      const next = Math.max(0, Math.min(maxStock, Math.round((current + delta) * 100) / 100))
+      return { ...prev, [avlId]: next }
+    })
+  }
+
+  return <div className="stack">
+    <div className="breadcrumb-row">
+      <Button variant="text" icon="chevron.left" onClick={() => work.go('paket-saya')}>Kembali ke Paket Saya</Button>
+    </div>
+
+    {query.error && <Notice tone="error">{query.error} <Button variant="text" onClick={query.reload}>Muat ulang</Button></Notice>}
+    {savedMsg && <Notice tone="good">{savedMsg}</Notice>}
+
+    {selection ? (
+      <Card title="Pilihan Anda sudah tercatat" actions={<Chip tone="good">Dikonfirmasi</Chip>}>
+        <ul className="simple-list">
+          {selection.items.map(it => {
+            const avl = availability.find(a => a.availability_id === it.availability_id)
+            return <li key={it.availability_id}>
+              <div className="row-between">
+                <strong>{avl ? cropName(avl.crop_id) : 'Sayuran'}</strong>
+                <strong className="tabular">{kg(it.quantity_kg)} kg</strong>
+              </div>
+            </li>
+          })}
+        </ul>
+        <p className="muted-meta">Dikirim pada {dateTime(selection.recorded_at)}</p>
+      </Card>
+    ) : !availability.length ? (
+      <Card><Empty>Pilihan sayuran minggu ini belum dibuka.</Empty></Card>
+    ) : reviewing ? (
+      <Card title="Tinjau pilihan Anda" subtitle={periodDates(work.period)}>
+        <ul className="simple-list">
+          {selectedItems.map(({ row, qty }) => <li key={row.availability_id}>
+            <div className="row-between">
+              <strong>{cropName(row.crop_id)}</strong>
+              <strong className="tabular">{kg(qty)} kg</strong>
+            </div>
+          </li>)}
+          <li className="table-total">
+            <div className="row-between">
+              <strong>Total pilihan</strong>
+              <strong className="tabular">{kg(totalSelected)} / {kg(quota)} kg</strong>
+            </div>
+          </li>
+        </ul>
+        <p className="muted-meta">Permintaan Anda akan disesuaikan apabila hasil panen akhir berubah.</p>
+        {selectAction.error && <Notice tone="error">
+          {selectAction.error} {selectAction.status === 409 && <Button variant="text" onClick={() => { setReviewing(false); query.reload() }}>Muat ulang stok</Button>}
+        </Notice>}
+        <form onSubmit={selectAction.submit(async () => {
+          const items = selectedItems.map(({ row, qty }) => ({
+            availability_id: row.availability_id,
+            availability_version: row.version,
+            quantity_kg: qty,
+          }))
+          await work.api.post('/member-selections', { period: work.period, items })
+          setSavedMsg('Pilihan sayuran berhasil dikonfirmasi.')
+          setReviewing(false)
+          work.refresh()
+        })}>
+          <div className="toolbar-group">
+            <Button variant="secondary" onClick={() => setReviewing(false)}>Ubah pilihan</Button>
+            <Button type="submit" disabled={selectAction.pending}>
+              {selectAction.pending ? 'Menyimpan…' : 'Konfirmasi pilihan'}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    ) : (
+      <>
+        <Card>
+          <div className="row-between">
+            <div>
+              <span className="kpi-label">Kuota terpakai</span>
+              <strong className={`metric-medium tabular ${quotaExceeded ? 'text-shortage' : ''}`}>
+                {kg(totalSelected)} / {kg(quota)} kg
+              </strong>
+            </div>
+            <span className="muted-meta">Sisa kuota: <strong>{kg(Math.max(0, quota - totalSelected))} kg</strong></span>
+          </div>
+          <ProgressBar value={totalSelected} max={Math.max(quota, 1)} tone={quotaExceeded ? 'shortage' : 'good'} label="Kuota terpakai" />
+          {quotaExceeded && <p className="text-shortage">Total melebihi batas kuota mingguan Anda.</p>}
+        </Card>
+
+        <div className="catalog-grid">
+          {availability.map(row => {
+            const val = amounts[row.availability_id] ?? 0
+            const maxStock = row.remaining_quantity_kg ?? row.approved_quantity_kg
+            const remainingQuota = Math.max(0, quota - totalSelected)
+            const canAdd = val < maxStock && remainingQuota >= 0.25
+            return <div key={row.availability_id} className="catalog-card">
+              <CropThumb cropId={row.crop_id} large />
+              <div className="catalog-card-body">
+                <strong>{cropName(row.crop_id)}</strong>
+                <span className="muted-meta">Tersedia: {kg(maxStock)} kg</span>
+                <div className="stepper" role="group" aria-label={`Jumlah ${cropName(row.crop_id)}`}>
+                  <button type="button" className="stepper-btn" aria-label={`Kurangi ${cropName(row.crop_id)}`}
+                    disabled={val <= 0} onClick={() => adjustQty(row.availability_id, maxStock, -0.25)}>
+                    <Symbol name="minus" />
+                  </button>
+                  <input type="number" className="stepper-input" aria-label={`Berat ${cropName(row.crop_id)} (kg)`}
+                    min={0} max={maxStock} step={0.25} value={val}
+                    onChange={e => setAmounts(prev => ({ ...prev, [row.availability_id]: Math.max(0, Number(e.target.value) || 0) }))} />
+                  <span className="stepper-unit">kg</span>
+                  <button type="button" className="stepper-btn stepper-btn--plus" aria-label={`Tambah ${cropName(row.crop_id)}`}
+                    disabled={!canAdd} onClick={() => adjustQty(row.availability_id, maxStock, 0.25)}>
+                    <Symbol name="plus" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          })}
+        </div>
+
+        <Button className="btn-full" disabled={totalSelected <= 0 || quotaExceeded} onClick={() => setReviewing(true)}>
+          Tinjau pilihan ({kg(totalSelected)} kg)
+        </Button>
+      </>
+    )}
+  </div>
+}
+
+/* --- PEMBARUAN PAKET (MEMBER) --- */
+export function MemberUpdates({ work }: { work: Workspace }) {
+  const query = useResource(
+    signal => work.api.memberOverview(work.period, signal),
+    [work.api, work.period, work.revision],
+    work.onAuthExpired,
+  )
+  const updates = query.data?.updates ?? []
+
+  return <div className="stack">
+    {query.error && <Notice tone="error">{query.error} <Button variant="text" onClick={query.reload}>Muat ulang</Button></Notice>}
+    <Card title="Pembaruan paket" subtitle={periodDates(work.period)}>
+      {updates.length ? <ul className="simple-list">
+        {updates.map(row => <li key={`${row.adjustment_id}-${row.availability_id}`}>
+          <div className="row-between">
+            <strong>{row.crop_id ? cropName(row.crop_id) : 'Sayuran'}</strong>
+            <Chip tone={row.removed || row.quantity_kg === 0 ? 'shortage' : 'good'}>
+              {row.removed ? 'Dihapus (0 kg)' : `${kg(row.quantity_kg)} kg`}
+            </Chip>
+          </div>
+          <p>{row.reason}</p>
+          <span className="muted-meta">
+            {row.previous_quantity_kg !== undefined && row.previous_quantity_kg !== null && `Sebelumnya ${kg(row.previous_quantity_kg)} kg · `}
+            {dateTime(row.approved_at)}
+          </span>
+        </li>)}
+      </ul> : <Empty>Belum ada perubahan paket untuk Anda pada periode ini.</Empty>}
+    </Card>
+  </div>
+}
+
+/* --- RIWAYAT & ULASAN PAKET (PACKAGE-CENTRIC) --- */
+export function MemberHistoryFeedback({ work }: { work: Workspace }) {
+  const query = useResource(
+    signal => work.api.memberOverview(work.period, signal),
+    [work.api, work.period, work.revision],
+    work.onAuthExpired,
+  )
+  const fbAction = useAction()
+  const [reviewPeriod, setReviewPeriod] = useState<string | null>(null)
+  const [copiedPeriod, setCopiedPeriod] = useState<string | null>(null)
+  const [savedMsg, setSavedMsg] = useState('')
+
+  const data = query.data
+  if (query.loading && !data) return <p className="empty" role="status">Memuat riwayat paket…</p>
+
+  const packages = data?.packages ?? []
+
+  return <div className="stack">
+    {query.error && <Notice tone="error">{query.error} <Button variant="text" onClick={query.reload}>Muat ulang</Button></Notice>}
+    {savedMsg && <Notice tone="good">{savedMsg}</Notice>}
+
+    {packages.length ? packages.map(pkg => {
+      const items = pkg.allocated_items.length ? pkg.allocated_items : pkg.requested_items
+      const isWriting = reviewPeriod === pkg.period
+      const contactMsg = `Halo pengelola CSA Tani Sauyunan, saya ${data?.member.name ?? 'anggota'} ingin menanyakan paket periode ${periodDates(pkg.period, true)}. Terima kasih.`
+
+      return <Card key={pkg.period}
+        title={periodDates(pkg.period, true)}
+        subtitle={`${pkg.package_name}${pkg.total_kg > 0 ? ` · Total ${kg(pkg.total_kg)} kg` : ''}`}
+        actions={<Chip tone={pkg.receipt_confirmed ? 'good' : 'neutral'}>{pkg.status_label}</Chip>}>
+
+        {items.length ? <div className="package-items-list">
+          {items.map((it, idx) => <div key={`${it.crop_id}-${idx}`} className="package-item-row">
+            <CropThumb cropId={it.crop_id} />
+            <div className="row-between" style={{ flex: 1 }}>
+              <strong>{cropName(it.crop_id)}</strong>
+              <strong className="tabular">{kg(it.quantity_kg)} kg</strong>
+            </div>
+          </div>)}
+        </div> : <p className="muted-meta">Belum ada sayuran yang tercatat untuk minggu ini.</p>}
+
+        {pkg.feedback ? (
+          <div className="saved-review-box">
+            <Chip tone="good">Ulasan terkirim</Chip>
+            <p>“{pkg.feedback.comment}”</p>
+          </div>
+        ) : isWriting ? (
+          <form className="form inline-drawer" onSubmit={fbAction.submit(async fd => {
+            setSavedMsg('')
+            const comment = value(fd, 'comment')
+            if (!comment) throw new Error('Tuliskan ulasan sebelum mengirim.')
+            await work.api.post('/member-feedback', { period: pkg.period, comment })
+            setSavedMsg('Ulasan paket berhasil dikirim.')
+            setReviewPeriod(null)
+            work.refresh()
+          })}>
+            <Field label="Bagaimana paket Anda?">
+              <textarea name="comment" rows={3} required maxLength={2000} placeholder="Kesegaran sayuran, kesesuaian isi paket, atau saran…" />
+            </Field>
+            {fbAction.error && <Notice tone="error">{fbAction.error}</Notice>}
+            <div className="toolbar-group">
+              <Button variant="secondary" onClick={() => setReviewPeriod(null)}>Batal</Button>
+              <Button type="submit" disabled={fbAction.pending}>{fbAction.pending ? 'Mengirim…' : 'Kirim ulasan'}</Button>
+            </div>
+          </form>
+        ) : null}
+
+        <div className="card-footer-row">
+          <Button variant="text" onClick={() => {
+            void navigator.clipboard?.writeText(contactMsg).then(() => setCopiedPeriod(pkg.period)).catch(() => undefined)
+          }}>
+            {copiedPeriod === pkg.period ? 'Pesan pengelola disalin' : 'Hubungi pengelola'}
+          </Button>
+          {pkg.receipt_confirmed && !pkg.feedback && !isWriting && (
+            <Button onClick={() => setReviewPeriod(pkg.period)}>Beri ulasan</Button>
+          )}
+        </div>
+      </Card>
+    }) : <Card><Empty>Belum ada riwayat paket.</Empty></Card>}
   </div>
 }

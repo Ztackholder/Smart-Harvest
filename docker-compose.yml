@@ -1,0 +1,121 @@
+services:
+  db:
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-smartharvest}
+      POSTGRES_USER: ${POSTGRES_USER:-smartharvest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smartharvest} -d ${POSTGRES_DB:-smartharvest}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["alembic", "-c", "backend/alembic.ini", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smartharvest}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-smartharvest}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+    restart: "no"
+
+  api:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-smartharvest}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-smartharvest}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-localhost,127.0.0.1,web,api}
+      MODEL_PATH: ${MODEL_PATH:-/app/ai/models/model.joblib}
+      MODEL_ENABLED: ${MODEL_ENABLED:-true}
+      MQTT_ENABLED: ${MQTT_ENABLED:-false}
+      MQTT_SOURCE: ${MQTT_SOURCE:-iot}
+      MQTT_TRANSPORT: ${MQTT_TRANSPORT:-tcp}
+      MQTT_WIRE_BLOCK_ID: ${MQTT_WIRE_BLOCK_ID:-BLOK-A1}
+      MQTT_HOST: ${MQTT_HOST:-broker.hivemq.com}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_TOPIC: ${MQTT_TOPIC:-tani/sensor/lingkungan}
+      MQTT_QOS: ${MQTT_QOS:-0}
+      MQTT_FARM_ID: ${MQTT_FARM_ID:-}
+      MQTT_DEVICE_ID: ${MQTT_DEVICE_ID:-}
+      MQTT_CROP_ID: ${MQTT_CROP_ID:-}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TLS: ${MQTT_TLS:-false}
+      AUTH_BOOTSTRAP_FARMER_USERNAME: ${AUTH_BOOTSTRAP_FARMER_USERNAME:-}
+      AUTH_BOOTSTRAP_FARMER_PASSWORD: ${AUTH_BOOTSTRAP_FARMER_PASSWORD:-}
+      AUTH_BOOTSTRAP_COORDINATOR_USERNAME: ${AUTH_BOOTSTRAP_COORDINATOR_USERNAME:-}
+      AUTH_BOOTSTRAP_COORDINATOR_PASSWORD: ${AUTH_BOOTSTRAP_COORDINATOR_PASSWORD:-}
+      AUTH_BOOTSTRAP_MEMBER_ELIGIBLE_USERNAME: ${AUTH_BOOTSTRAP_MEMBER_ELIGIBLE_USERNAME:-}
+      AUTH_BOOTSTRAP_MEMBER_ELIGIBLE_PASSWORD: ${AUTH_BOOTSTRAP_MEMBER_ELIGIBLE_PASSWORD:-}
+      AUTH_BOOTSTRAP_MEMBER_REGULAR_USERNAME: ${AUTH_BOOTSTRAP_MEMBER_REGULAR_USERNAME:-}
+      AUTH_BOOTSTRAP_MEMBER_REGULAR_PASSWORD: ${AUTH_BOOTSTRAP_MEMBER_REGULAR_PASSWORD:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      PUBLIC_PROFILE: ${PUBLIC_PROFILE:-true}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready',timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 10
+    expose: ["8000"]
+    networks: [internal]
+
+  web:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_DEFAULT_PERIOD: ${VITE_DEFAULT_PERIOD:-2026-W48}
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [internal]
+
+  mqtt:
+    image: eclipse-mosquitto:2.0.21
+    profiles: ["local-mqtt"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+    networks: [internal]
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.0
+    profiles: ["tunnel"]
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN:-}"]
+    depends_on:
+      web:
+        condition: service_started
+    networks: [internal]
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mosquitto_data:
+
+networks:
+  internal:
+    name: smartharvest_internal
+    internal: false
+
+
