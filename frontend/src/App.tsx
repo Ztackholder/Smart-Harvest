@@ -78,7 +78,7 @@ function AccountForm({ account, onSave }: { account: Account | null; onSave: (ac
     {accounts.map(option => <button type="button" key={option.memberId ?? option.role}
       className="account-option" onClick={() => onSave(option)}>
       <span><strong>{option.name}</strong>
-        {option.role === 'MEMBER' && <small>{option.canSelect ? 'Paket Pilih (2 kg)' : 'Paket Reguler'}</small>}
+        {option.role === 'MEMBER' && <small>{option.canSelect ? 'Paket Custom — Pilih sendiri sayuran sesuai kuota langganan Anda.' : 'Paket Reguler — Isi paket ditentukan oleh pengelola berdasarkan ketersediaan sayuran.'}</small>}
       </span>
       {account === option ? <Chip tone="good">Aktif</Chip> : <Symbol name="chevron.right" />}
     </button>)}
@@ -260,7 +260,7 @@ function WorkspaceView({ account, onAccount, onExit, period, setPeriod }: {
       </nav>
       <div className="sidebar-footer">
         <button type="button" className="sidebar-account" onClick={() => setDialog('account')}>
-          <span>{account.username ?? account.name}</span>
+          <span>{account.name}</span>
           <small>Akun & kata sandi</small>
         </button>
         <button type="button" className="sidebar-logout" onClick={onExit}>Keluar</button>

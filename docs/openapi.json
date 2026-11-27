@@ -1575,6 +1575,47 @@
           }
         }
       }
+    },
+    "/api/v1/member/subscription": {
+      "post": {
+        "summary": "Schedule Member Subscription",
+        "operationId": "schedule_member_subscription_api_v1_member_subscription_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2234,6 +2275,29 @@
           "quantity_kg"
         ],
         "title": "SelectionItem"
+      },
+      "SubscriptionChangeIn": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "target_package": {
+            "type": "string",
+            "enum": [
+              "Paket Reguler",
+              "Paket Custom"
+            ],
+            "title": "Target Package"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "period",
+          "target_package"
+        ],
+        "title": "SubscriptionChangeIn"
       },
       "ValidationError": {
         "properties": {

@@ -170,3 +170,14 @@ def validate_period(value: str) -> str:
     except ValueError:
         raise ValueError("period is not a valid ISO week")
     return value
+
+
+class SubscriptionChangeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    period: str
+    target_package: Literal["Paket Reguler", "Paket Custom"]
+
+    @field_validator("period")
+    @classmethod
+    def check_period(cls, v: str) -> str:
+        return validate_period(v)

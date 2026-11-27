@@ -59,10 +59,24 @@ class HarvestPredictionService:
     def __init__(self, session: Session, farm_record, predictor=None):
         self.db = session
         self.farm_record = farm_record
-        if predictor is not None:
-            self.predictor, self.model_error = predictor, None
-        else:
-            self.predictor, self.model_error = load_predictor()
+        self._predictor_loaded = predictor is not None
+        self._predictor = predictor
+        self._model_error: str | None = None
+
+    def _ensure_predictor(self) -> None:
+        if not self._predictor_loaded:
+            self._predictor, self._model_error = load_predictor()
+            self._predictor_loaded = True
+
+    @property
+    def predictor(self):
+        self._ensure_predictor()
+        return self._predictor
+
+    @property
+    def model_error(self) -> str | None:
+        self._ensure_predictor()
+        return self._model_error
 
     def _upsert_state(self, farm_id: str, crop_id: str, period: str, state_payload: dict) -> dict:
         sid = _state_id(farm_id, crop_id, period)

@@ -15,7 +15,7 @@ from .services.svc_05_member import MemberInformationService
 JAKARTA_TZ = timezone(timedelta(hours=7))
 
 DEMO_FARMS = (
-    {"farm_id": "FARM-01", "name": "Kebun Ciburial", "farmer_name": "Pak Dedi", "contact_phone": None},
+    {"farm_id": "FARM-01", "name": "Kebun Ciburial", "farmer_name": "Faiz Santoso", "contact_phone": None},
     {"farm_id": "FARM-02", "name": "Kebun Cimenyan", "farmer_name": "Pak Asep", "contact_phone": None},
 )
 
@@ -28,11 +28,11 @@ DEMO_CROPS = (
 )
 
 DEMO_MEMBERS = (
-    ("MBR-001", "Rina Kusuma", "Paket Pilih", True, 2.0, 2.0),
-    ("MBR-002", "Budi Santoso", "Paket Reguler", False, 0.0, 2.0),
-    ("MBR-003", "Sari Wulandari", "Paket Pilih", True, 2.0, 2.0),
+    ("MBR-001", "Nisrina Pratiwi", "Paket Custom", True, 2.0, 2.0),
+    ("MBR-002", "Adrian Hidayat", "Paket Reguler", False, 0.0, 2.0),
+    ("MBR-003", "Sari Wulandari", "Paket Custom", True, 2.0, 2.0),
     ("MBR-004", "Hendra Wijaya", "Paket Reguler", False, 0.0, 2.0),
-    ("MBR-005", "Dewi Lestari", "Paket Pilih", True, 2.0, 2.0),
+    ("MBR-005", "Dewi Lestari", "Paket Custom", True, 2.0, 2.0),
     ("MBR-006", "Agus Pratama", "Paket Reguler", False, 0.0, 2.0),
 )
 
@@ -105,8 +105,8 @@ def _seed_telemetry_7d(db: Session, scenario: str, cutoff_utc: datetime) -> None
     configs = (
         # FARM-01: Kebun Ciburial — stable (~26.4C, ~78% RH, ~65% soil), fresh
         ("FARM-01", "SYN-CIBURIAL-01", 26.4, 78.0, 65.0, 926.0, timedelta(minutes=5)),
-        # FARM-02: Kebun Cimenyan — warm/dry concern (~31.2C, ~59% RH, ~23% soil), stale (~45m ago)
-        ("FARM-02", "SYN-CIMENYAN-01", 31.2, 59.0, 23.0, 921.0, timedelta(minutes=45)),
+        # FARM-02: Kebun Cimenyan — warm/dry concern (~31.2C, ~59% RH, ~23% soil), offline (>2h lag, still <=24h for 7d AI coverage)
+        ("FARM-02", "SYN-CIMENYAN-01", 31.2, 59.0, 23.0, 921.0, timedelta(hours=3)),
     )
     for farm_id, dev_id, base_t, base_h, base_s, base_p, lag in configs:
         end_dt = cutoff_utc - lag
@@ -281,7 +281,7 @@ def seed_scenario(db: Session, scenario: str = "operational", period: str = "202
     pred_svc = HarvestPredictionService(db, farm_svc)
     supply_svc = SupplyCoordinationService(db, farm_record=farm_svc, prediction_service=pred_svc)
     member_svc = MemberInformationService(db, supply_svc, farm_record=farm_svc)
-    coord = Principal("USR-COORD", "COORDINATOR", "Koordinator", ["FARM-01", "FARM-02"])
+    coord = Principal("USR-COORD", "COORDINATOR", "Adriel Suherman", ["FARM-01", "FARM-02"])
 
     for f in DEMO_FARMS:
         _upsert(db, "Farm", f["farm_id"], {**f, "synthetic": True, "demo_scenario": scenario}, farm_id=f["farm_id"])
@@ -313,7 +313,7 @@ def seed_scenario(db: Session, scenario: str = "operational", period: str = "202
         )
 
     monday = _period_monday(period)
-    target_date = (monday + timedelta(days=4)).isoformat()
+    target_date = (monday + timedelta(days=6)).isoformat()
     plant_date = (monday - timedelta(days=56)).isoformat()
     for pid, fid, cid, area, count, _ in DEMO_PLANTINGS:
         _upsert(

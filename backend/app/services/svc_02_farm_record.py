@@ -97,8 +97,11 @@ class FarmRecordService:
         query = select(Record).where(Record.kind == "Observation", Record.farm_id == farm_id)
         if crop_id:
             query = query.where((Record.crop_id.is_(None)) | (Record.crop_id == crop_id))
-        rows = self.db.scalars(query.order_by(Record.created_at.desc())).all()
-        items = [r.payload for r in rows if not source or r.payload.get("source") == source]
+        ordered = query.order_by(Record.created_at.desc())
+        if not source:
+            return [r.payload for r in self.db.scalars(ordered.offset(offset).limit(limit)).all()]
+        rows = self.db.scalars(ordered.limit(max(500, (offset + limit) * 5))).all()
+        items = [r.payload for r in rows if r.payload.get("source") == source]
         return items[offset : offset + limit]
 
     def get_observation(self, observation_id: str) -> dict | None:
@@ -198,7 +201,7 @@ class FarmRecordService:
                     "farm_id": "FARM-01",
                     "crop_id": "SPINACH",
                     "planting_date": "2026-10-01",
-                    "target_harvest_date": "2026-11-27",
+                    "target_harvest_date": "2026-11-29",
                     "planted_area_m2": 8.0,
                     "plant_count": 64,
                     "synthetic": True,
@@ -224,8 +227,8 @@ class FarmRecordService:
                 farm_id="FARM-01",
             )
         member_specs = (
-            ("MBR-001", "Anggota 1", "Paket Pilih", True, 2.0, 2.0),
-            ("MBR-002", "Anggota 2", "Paket Reguler", False, 0.0, 2.0),
+            ("MBR-001", "Nisrina Pratiwi", "Paket Custom", True, 2.0, 2.0),
+            ("MBR-002", "Adrian Hidayat", "Paket Reguler", False, 0.0, 2.0),
         )
         for member_id, name, package_name, eligible, quota_kg, max_stock_kg in member_specs:
             if not record(self.db, "Member", member_id):

@@ -546,3 +546,59 @@ def test_b09_farmer_farm_scope_isolation_and_member_packages(tmp_path, monkeypat
         m_ov = client.get("/api/v1/member/overview?period=2026-W48", headers=member1).json()
         assert any(pkg["period"] == "2026-W47" and pkg["receipt_confirmed"] and pkg["feedback"] for pkg in m_ov["packages"])
 
+
+def test_v3_identities_offline_farm_and_next_period_subscription(tmp_path, monkeypatch):
+    from backend.app.seed import seed_scenario
+
+    _setup_env(monkeypatch, tmp_path, model_enabled=True)
+    monkeypatch.setattr(settings, "model_path", "ai/models/model.joblib")
+
+    with TestClient(app, headers={"host": "localhost"}) as client:
+        with session_factory()() as db:
+            seed_scenario(db, scenario="operational", period="2026-W48", reset_demo=True)
+            db.commit()
+
+        coord = _login(client, "coordinator", "rem-coordinator-password-123")
+        member1 = _login(client, "member-eligible", "rem-eligible-password-1234")
+        member2 = _login(client, "member-regular", "rem-regular-password-12345")
+
+        # V3 names & offline Kebun Cimenyan
+        c_ov = client.get("/api/v1/coordinator/overview?period=2026-W48", headers=coord).json()
+        names = {m["member_id"]: m["name"] for m in c_ov["member_rows"]}
+        assert names["MBR-001"] == "Nisrina Pratiwi"
+        assert names["MBR-002"] == "Adrian Hidayat"
+        farm2 = next(f for f in c_ov["farms"] if f["farm"]["farm_id"] == "FARM-02")
+        assert farm2["telemetry"]["status"] == "offline"
+        assert any(p["latest_prediction"] is not None for p in farm2["plantings"])
+
+        # Next-period subscription switch preserves 2026-W48 and takes effect in 2026-W49
+        sw1 = client.post(
+            "/api/v1/member/subscription",
+            headers=member1,
+            json={"period": "2026-W48", "target_package": "Paket Reguler"},
+        )
+        assert sw1.status_code == 200
+        assert sw1.json()["effective_period"] == "2026-W49"
+
+        ov_w48 = client.get("/api/v1/member/overview?period=2026-W48", headers=member1).json()
+        assert ov_w48["member"]["package_name"] == "Paket Custom"
+        assert ov_w48["member"]["eligible"] is True
+        assert ov_w48["next_period_subscription"]["package_name"] == "Paket Reguler"
+
+        ov_w49 = client.get("/api/v1/member/overview?period=2026-W49", headers=member1).json()
+        assert ov_w49["member"]["package_name"] == "Paket Reguler"
+        assert ov_w49["member"]["eligible"] is False
+
+        # Member 2 (Adrian Hidayat) can schedule Paket Custom for 2026-W49 while 2026-W48 stays Paket Reguler
+        sw2 = client.post(
+            "/api/v1/member/subscription",
+            headers=member2,
+            json={"period": "2026-W48", "target_package": "Paket Custom"},
+        )
+        assert sw2.status_code == 200
+        ov2_w48 = client.get("/api/v1/member/overview?period=2026-W48", headers=member2).json()
+        assert ov2_w48["member"]["package_name"] == "Paket Reguler"
+        ov2_w49 = client.get("/api/v1/member/overview?period=2026-W49", headers=member2).json()
+        assert ov2_w49["member"]["package_name"] == "Paket Custom"
+        assert ov2_w49["member"]["eligible"] is True
+

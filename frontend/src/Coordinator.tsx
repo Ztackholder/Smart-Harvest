@@ -565,7 +565,7 @@ export function AllocationRealization({ work }: { work: Workspace }) {
       <div className="kpi-card">
         <span className="kpi-label">Pilihan anggota</span>
         <strong className="kpi-value">{kg(totalSelected)} kg</strong>
-        <span className="kpi-sub">Permintaan Paket Pilih</span>
+        <span className="kpi-sub">Permintaan Paket Custom</span>
       </div>
       <div className="kpi-card">
         <span className="kpi-label">Rencana pembagian</span>
@@ -722,7 +722,7 @@ export function AllocationRealization({ work }: { work: Workspace }) {
                 </button>
               </td>
               <td>{m.package_name}</td>
-              <td className="tabular">{m.eligible ? (m.requested_total_kg !== null ? `${kg(m.requested_total_kg)} kg` : 'Belum memilih') : 'Diatur koordinator'}</td>
+              <td className="tabular">{m.eligible ? (m.requested_total_kg !== null ? `${kg(m.requested_total_kg)} kg` : 'Belum memilih') : 'Diatur pengelola'}</td>
               <td className="tabular">{hasFinalAlloc ? `${kg(m.allocated_total_kg ?? 0)} kg` : 'Menunggu'}</td>
               <td>
                 <Chip tone={m.lifecycle_status === 'Diterima' || m.lifecycle_status === 'Siap didistribusikan' ? 'good' : m.lifecycle_status === 'Perlu penyesuaian' ? 'warn' : 'neutral'}>
@@ -762,7 +762,7 @@ export function AllocationRealization({ work }: { work: Workspace }) {
                 <strong className="tabular">{kg(it.quantity_kg)} kg</strong>
               </div>
             </li>)}
-          </ul> : <p className="muted-meta">{detailMember.eligible ? 'Belum memilih sayuran.' : 'Diatur oleh koordinator.'}</p>}
+          </ul> : <p className="muted-meta">{detailMember.eligible ? 'Belum memilih sayuran.' : 'Isi paket ditentukan oleh pengelola berdasarkan ketersediaan sayuran.'}</p>}
         </div>
         <div>
           <strong>Pembagian paket</strong>

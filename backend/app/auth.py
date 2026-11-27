@@ -62,19 +62,22 @@ class AuthService:
     def bootstrap(self) -> None:
         configured = (
             ("USR-FARMER", "auth_bootstrap_farmer_username", "auth_bootstrap_farmer_password",
-             "FARMER", "Petani mitra", ["FARM-01"], None, False),
+             "FARMER", "Faiz Santoso", ["FARM-01"], None, False),
             ("USR-COORD", "auth_bootstrap_coordinator_username", "auth_bootstrap_coordinator_password",
-             "COORDINATOR", "Koordinator", ["FARM-01", "FARM-02"], None, False),
+             "COORDINATOR", "Adriel Suherman", ["FARM-01", "FARM-02"], None, False),
             ("USR-MEMBER-01", "auth_bootstrap_member_eligible_username", "auth_bootstrap_member_eligible_password",
-             "MEMBER", "Rina Kusuma", [], "MBR-001", True),
+             "MEMBER", "Nisrina Pratiwi", [], "MBR-001", True),
             ("USR-MEMBER-02", "auth_bootstrap_member_regular_username", "auth_bootstrap_member_regular_password",
-             "MEMBER", "Budi Santoso", [], "MBR-002", False),
+             "MEMBER", "Adrian Hidayat", [], "MBR-002", False),
         )
         seen_usernames: set[str] = set()
         for user_id, username_key, password_key, role, name, farms, member_id, can_select in configured:
             existing = self.db.get(AuthUser, user_id)
             if existing:
-                if role == "COORDINATOR" and set(existing.farm_ids or []) != set(farms):
+                existing.display_name = name
+                if role == "FARMER":
+                    existing.farm_ids = list(farms)
+                elif role == "COORDINATOR" and set(existing.farm_ids or []) != set(farms):
                     existing.farm_ids = sorted(set(existing.farm_ids or []) | set(farms))
                 continue
             username = str(getattr(settings, username_key, "") or "").strip().lower()

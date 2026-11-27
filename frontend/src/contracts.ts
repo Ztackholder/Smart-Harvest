@@ -11,10 +11,10 @@ export type Account = {
 }
 
 export const accounts: Account[] = [
-  { role: 'COORDINATOR', name: 'Koordinator' },
-  { role: 'FARMER', name: 'Petani mitra' },
-  { role: 'MEMBER', name: 'Anggota 1', memberId: 'MBR-001', canSelect: true },
-  { role: 'MEMBER', name: 'Anggota 2', memberId: 'MBR-002', canSelect: false },
+  { role: 'COORDINATOR', name: 'Adriel Suherman' },
+  { role: 'FARMER', name: 'Faiz Santoso' },
+  { role: 'MEMBER', name: 'Nisrina Pratiwi', memberId: 'MBR-001', canSelect: true },
+  { role: 'MEMBER', name: 'Adrian Hidayat', memberId: 'MBR-002', canSelect: false },
 ]
 
 export const apiBase = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '')
@@ -448,6 +448,13 @@ export type MemberOverview = {
     eligible: boolean
     quota_kg: number
   }
+  next_period_subscription?: {
+    effective_period: string
+    package_name: string
+    eligible: boolean
+    quota_kg: number
+    updated_at?: string
+  } | null
   availability: Availability[]
   selection: Selection | null
   updates: AllocationUpdate[]

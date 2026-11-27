@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -9,6 +9,14 @@ from .common import audit, new_id, parse_period, require
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _next_period(period: str) -> str:
+    parse_period(period)
+    year, week = period.split("-W")
+    monday = date.fromisocalendar(int(year), int(week), 1)
+    nxt = (monday + timedelta(days=7)).isocalendar()
+    return f"{nxt.year}-W{nxt.week:02d}"
 
 
 class MemberInformationService:
@@ -30,10 +38,81 @@ class MemberInformationService:
             return {"items": self.supply.member_approved_availability(period, member_id=mid)}
         return {"items": self.supply.approved_availability(period)}
 
+    def effective_package(self, member: dict, period: str) -> dict:
+        parse_period(period)
+        overrides = member.get("subscription_overrides") or {}
+        matching = [
+            (eff_p, val)
+            for eff_p, val in overrides.items()
+            if eff_p <= period and isinstance(val, dict) and val.get("target_package") in {"Paket Reguler", "Paket Custom"}
+        ]
+        if matching:
+            _, latest = sorted(matching, key=lambda x: (x[0], x[1].get("updated_at", "")))[-1]
+            elig = latest["target_package"] == "Paket Custom"
+            return {
+                "package_name": latest["target_package"],
+                "eligible": elig,
+                "quota_kg": 2.0 if elig else 0.0,
+            }
+        elig = bool(member.get("eligible", False))
+        return {
+            "package_name": member.get("package_name", "Paket Custom" if elig else "Paket Reguler"),
+            "eligible": elig,
+            "quota_kg": float(member.get("quota_kg", 2.0 if elig else 0.0)),
+        }
+
+    def get_next_period_subscription(self, member_id: str, period: str) -> dict | None:
+        nxt = _next_period(period)
+        member = self._get_member(member_id)
+        if not member:
+            return None
+        val = (member.get("subscription_overrides") or {}).get(nxt)
+        if not isinstance(val, dict):
+            return None
+        return {
+            "effective_period": nxt,
+            "package_name": val["target_package"],
+            "eligible": bool(val["eligible"]),
+            "quota_kg": float(val["quota_kg"]),
+            "updated_at": val.get("updated_at"),
+        }
+
+    def schedule_subscription_change(self, data: dict, principal: Principal) -> dict:
+        if principal.role != "MEMBER" or not principal.member_id:
+            error("FORBIDDEN", "Member role required", 403)
+        row = record(self.db, "Member", principal.member_id)
+        require(row, "MEMBER_NOT_FOUND", "Member does not exist")
+        effective_period = _next_period(data["period"])
+        target_pkg = data["target_package"]
+        elig = target_pkg == "Paket Custom"
+        quota = 2.0 if elig else 0.0
+        updated_at = _now_iso()
+        overrides = dict(row.payload.get("subscription_overrides") or {})
+        overrides[effective_period] = {
+            "target_package": target_pkg,
+            "eligible": elig,
+            "quota_kg": quota,
+            "requested_from_period": data["period"],
+            "updated_at": updated_at,
+        }
+        row.payload = {**row.payload, "subscription_overrides": overrides}
+        self.db.flush()
+        audit(self.db, principal.user_id, "scheduleSubscriptionChange", principal.member_id, {"target_package": target_pkg, "effective_period": effective_period})
+        return {
+            "effective_period": effective_period,
+            "package_name": target_pkg,
+            "eligible": elig,
+            "quota_kg": quota,
+            "updated_at": updated_at,
+        }
+
     def selection(self, data: dict, principal: Principal) -> dict:
-        if not principal.can_select:
-            error("PACKAGE_INELIGIBLE", "Member package does not allow selection", 403)
         parse_period(data["period"])
+        member = self._get_member(principal.member_id)
+        require(member)
+        eff = self.effective_package(member, data["period"])
+        if not eff["eligible"]:
+            error("PACKAGE_INELIGIBLE", "Member package does not allow selection", 403)
 
         # B02: Reject duplicate availability_id lines before stock/quota math
         raw_items = data["items"]
@@ -77,7 +156,7 @@ class MemberInformationService:
                 error("STOCK_LIMIT", "Selections exceed remaining approved stock", 409)
             accepted.append(item)
 
-        if total > Decimal(str(member["quota_kg"])) or total > Decimal(str(member["max_stock_kg"])):
+        if total > Decimal(str(eff["quota_kg"])) or total > Decimal(str(member["max_stock_kg"])):
             error("QUOTA_EXCEEDED", "Selection exceeds package quota or stock limit", 422)
 
         payload = {

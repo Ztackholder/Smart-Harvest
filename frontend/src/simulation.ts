@@ -32,8 +32,8 @@ export const simulationCatalog: Catalog = {
   crops: [{ crop_id: 'SPINACH', name: 'Bayam', supported_by_model: true }],
   periods: [demoPeriod],
   members: [
-    { member_id: 'MBR-001', name: 'Anggota 1', package_name: 'Paket Pilih', eligible: true, quota_kg: 2 },
-    { member_id: 'MBR-002', name: 'Anggota 2', package_name: 'Paket Reguler', eligible: false, quota_kg: 0 },
+    { member_id: 'MBR-001', name: 'Nisrina Pratiwi', package_name: 'Paket Custom', eligible: true, quota_kg: 2 },
+    { member_id: 'MBR-002', name: 'Adrian Hidayat', package_name: 'Paket Reguler', eligible: false, quota_kg: 0 },
   ],
 }
 

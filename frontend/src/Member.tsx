@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { cropImage, cropName, dateTime, kg, periodDates } from './contracts'
-import { Button, Card, Chip, Empty, Field, Notice, ProgressBar, Symbol, useAction, useResource, value } from './ui'
+import { Button, Card, Chip, Empty, Field, Modal, Notice, ProgressBar, Symbol, useAction, useResource, value } from './ui'
 import type { Workspace } from './workspace'
 
 function CropThumb({ cropId, large = false }: { cropId: string; large?: boolean }) {
@@ -21,12 +21,18 @@ export function MemberHome({ work }: { work: Workspace }) {
     [work.api, work.period, work.revision],
     work.onAuthExpired,
   )
+  const subAction = useAction()
+  const [subModal, setSubModal] = useState(false)
+  const [subSaved, setSubSaved] = useState('')
   const data = query.data
   if (query.loading && !data) return <p className="empty" role="status">Memuat informasi paket…</p>
 
   const member = data?.member
   const eligible = member?.eligible ?? Boolean(work.account.canSelect)
   const quota = member?.quota_kg ?? (eligible ? 2 : 0)
+  const nextSub = data?.next_period_subscription ?? null
+  const currentPkg = member?.package_name ?? (eligible ? 'Paket Custom' : 'Paket Reguler')
+  const altPkg = currentPkg === 'Paket Custom' ? 'Paket Reguler' : 'Paket Custom'
   const availability = data?.availability ?? []
   const selection = data?.selection ?? null
   const step = data?.progress_step ?? 'waiting_publication'
@@ -64,10 +70,41 @@ export function MemberHome({ work }: { work: Workspace }) {
     {query.error && <Notice tone="error">{query.error} <Button variant="text" onClick={query.reload}>Muat ulang</Button></Notice>}
 
     <div className="subscription-card">
-      <span className="kpi-label">Langganan aktif · {member?.name ?? work.account.name}</span>
-      <strong className="metric-large">{member?.package_name ?? (eligible ? 'Paket Pilih' : 'Paket Reguler')}</strong>
-      <p>{eligible ? `Kuota mingguan ${kg(quota)} kg` : 'Isi paket ditentukan oleh koordinator'}</p>
+      <div className="row-between">
+        <div>
+          <span className="kpi-label">Langganan aktif · {member?.name ?? work.account.name}</span>
+          <strong className="metric-large">{currentPkg}</strong>
+        </div>
+        <Button variant="secondary" onClick={() => { setSubSaved(''); setSubModal(true) }}>Ubah paket</Button>
+      </div>
+      <p>{eligible ? `Pilih sendiri sayuran sesuai kuota langganan Anda (${kg(quota)} kg/minggu).` : 'Isi paket ditentukan oleh pengelola berdasarkan ketersediaan sayuran.'}</p>
+      {nextSub && <p className="muted-meta">Periode berikutnya ({periodDates(nextSub.effective_period, true)}): <strong>{nextSub.package_name}</strong></p>}
     </div>
+    {subSaved && <Notice tone="good">{subSaved}</Notice>}
+    {subModal && <Modal title="Ubah jenis paket periode berikutnya" onClose={() => setSubModal(false)}>
+      <form className="stack-tight" onSubmit={subAction.submit(async () => {
+        const res = await work.api.post('/member/subscription', {
+          period: work.period,
+          target_package: altPkg,
+        })
+        setSubSaved(`Paket periode berikutnya (${periodDates(res.effective_period, true)}) dijadwalkan ke ${res.package_name}.`)
+        setSubModal(false)
+        work.refresh()
+      })}>
+        <p className="muted-meta">Perubahan hanya berlaku untuk periode minggu berikutnya. Pilihan dan alokasi periode {periodDates(work.period, true)} tetap dipertahankan.</p>
+        <div className="card">
+          <strong>Paket saat ini: {currentPkg}</strong>
+          <p className="muted-meta">{altPkg === 'Paket Custom' ? 'Paket Custom: Pilih sendiri sayuran sesuai kuota langganan Anda (2 kg/minggu).' : 'Paket Reguler: Isi paket ditentukan oleh pengelola berdasarkan ketersediaan sayuran.'}</p>
+        </div>
+        {subAction.error && <Notice tone="error">{subAction.error}</Notice>}
+        <div className="row-actions">
+          <Button variant="secondary" onClick={() => setSubModal(false)}>Batal</Button>
+          <Button type="submit" disabled={subAction.pending}>
+            {subAction.pending ? 'Menyimpan…' : `Jadwalkan ${altPkg}`}
+          </Button>
+        </div>
+      </form>
+    </Modal>}
 
     <Card title="Status minggu ini" subtitle={periodDates(work.period)}>
       <p className="text-good"><strong>{statusText}</strong></p>
@@ -106,7 +143,7 @@ export function MemberHome({ work }: { work: Workspace }) {
       <section className="stack-tight">
         <div>
           <h2 className="member-section-title">Sayuran minggu ini</h2>
-          <p className="muted-meta">Isi paket ditentukan oleh koordinator</p>
+          <p className="muted-meta">Isi paket ditentukan oleh pengelola berdasarkan ketersediaan sayuran.</p>
         </div>
         {!availability.length ? (
           <Card><Empty>Pilihan sayuran minggu ini belum dibuka.</Empty></Card>
@@ -159,7 +196,7 @@ export function MemberSelectionCatalog({ work }: { work: Workspace }) {
 
   if (!eligible) {
     return <Card title="Pilih sayuran">
-      <Empty>Paket Reguler tidak mencakup pemilihan sayuran mandiri. Isi paket ditentukan oleh koordinator.</Empty>
+      <Empty>Paket Reguler: Isi paket ditentukan oleh pengelola berdasarkan ketersediaan sayuran.</Empty>
     </Card>
   }
 

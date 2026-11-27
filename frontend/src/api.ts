@@ -46,6 +46,10 @@ type Operations = {
   '/actual-harvests': [ActualInput, Actual]
   '/member-feedback': [FeedbackInput, Feedback]
   '/package-receipts': [ReceiptInput, Receipt]
+  '/member/subscription': [
+    { period: string; target_package: 'Paket Reguler' | 'Paket Custom' },
+    { effective_period: string; package_name: string; eligible: boolean; quota_kg: number },
+  ]
 }
 
 function errorMessage(status: number, payload: unknown) {
@@ -134,12 +138,22 @@ export async function updatePassword(current_password: string, new_password: str
 }
 
 export function createApi(account: Account) {
+  const getCache = new Map<string, { expiresAt: number; data: unknown }>()
+  const cacheablePrefixes = ['/catalog', '/coordinator/overview', '/farmer/overview', '/member/overview']
+
   async function request<T>(path: string, body?: unknown, signal?: AbortSignal) {
     if (!apiBase) return simulate(account, path, body) as T
+    const isGet = body === undefined
+    const canCache = isGet && cacheablePrefixes.some(prefix => path.startsWith(prefix))
+    if (canCache) {
+      const hit = getCache.get(path)
+      if (hit && Date.now() < hit.expiresAt) return hit.data as T
+    }
+    if (!isGet) getCache.clear()
     let response: Response
     try {
       response = await fetch(apiBase + path, {
-        method: body === undefined ? 'GET' : 'POST',
+        method: isGet ? 'GET' : 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
@@ -161,6 +175,8 @@ export function createApi(account: Account) {
     const payload = await response.json().catch(() => null)
     if (!response.ok) throw new ApiError(response.status, errorMessage(response.status, payload), payload?.error?.code)
     if (payload === null) throw new ApiError(response.status, 'Server tidak mengembalikan respons JSON yang valid.')
+    if (canCache) getCache.set(path, { expiresAt: Date.now() + 15_000, data: payload })
+    if (!isGet) getCache.clear()
     return payload as T
   }
 

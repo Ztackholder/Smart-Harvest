@@ -53,7 +53,8 @@ def build_telemetry_summary(
             "observation_count_7d": 0,
         }
 
-    latest = sorted_obs[0]
+    iot_obs = [o for o in sorted_obs if o.get("source") == "iot"]
+    latest = iot_obs[0] if iot_obs else sorted_obs[0]
     latest_dt = _parse_dt(latest["observed_at"])
     age_sec = max(0.0, (now.astimezone(timezone.utc) - latest_dt).total_seconds())
     src = latest.get("source")
@@ -67,8 +68,9 @@ def build_telemetry_summary(
         status = "offline"
 
     observed_interval = None
-    if len(sorted_obs) >= 2:
-        prev_dt = _parse_dt(sorted_obs[1]["observed_at"])
+    interval_series = iot_obs if iot_obs else sorted_obs
+    if len(interval_series) >= 2:
+        prev_dt = _parse_dt(interval_series[1]["observed_at"])
         delta = (latest_dt - prev_dt).total_seconds()
         if delta > 0:
             observed_interval = round(delta, 1)

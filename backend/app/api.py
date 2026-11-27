@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
@@ -19,6 +20,7 @@ from .schemas import (
     ReceiptIn,
     RiskIn,
     SelectionIn,
+    SubscriptionChangeIn,
 )
 from .services.common import parse_period
 from .services.svc_01_farm_data import FarmDataIntegrationService
@@ -138,9 +140,34 @@ def services(session: Session = Depends(get_session)):
 # --- Baseline D2 REST APIs (API-01 through API-12) ---
 
 
+_TELEMETRY_CACHE: dict[tuple[str, str, str | None], tuple[float, dict]] = {}
+_TELEMETRY_CACHE_TTL = 15.0
+
+
+def _cached_telemetry_summary(db: Session, farm_svc: FarmRecordService, farm_id: str, crop_id: str | None, now: datetime) -> dict:
+    bind_key = str(db.get_bind().url)
+    key = (bind_key, farm_id, crop_id)
+    cached = _TELEMETRY_CACHE.get(key)
+    mono = time.monotonic()
+    if cached and mono - cached[0] < _TELEMETRY_CACHE_TTL:
+        return cached[1]
+    obs = farm_svc.list_observations_in_window(farm_id, crop_id, now - timedelta(days=7), now + timedelta(seconds=1))
+    summary = build_telemetry_summary(
+        obs,
+        now,
+        stale_seconds=settings.sensor_stale_seconds,
+        offline_seconds=settings.sensor_offline_seconds,
+    )
+    _TELEMETRY_CACHE[key] = (mono, summary)
+    return summary
+
+
 @router.post("/farm-observations", status_code=201)
 def submit_observation(body: ObservationIn, s=Depends(services), user: Principal = Depends(require_role("FARMER"))):
-    return s["data"].submit_observation(body.model_dump(mode="python"), user)
+    res = s["data"].submit_observation(body.model_dump(mode="python"), user)
+    for k in [k for k in _TELEMETRY_CACHE if k[1] == res["farm_id"]]:
+        _TELEMETRY_CACHE.pop(k, None)
+    return res
 
 
 @router.post("/harvest-estimates", status_code=201)
@@ -285,7 +312,7 @@ def catalog(s=Depends(services), user: Principal = Depends(current_principal)):
             {
                 "member_id": m["member_id"],
                 "name": m.get("name", m["member_id"]),
-                "package_name": m.get("package_name", "Paket Pilih" if m["eligible"] else "Paket Reguler"),
+                "package_name": m.get("package_name", "Paket Custom" if m["eligible"] else "Paket Reguler"),
                 "eligible": bool(m["eligible"]),
                 "quota_kg": float(m.get("quota_kg", 0.0)),
             }
@@ -436,13 +463,7 @@ def coordinator_overview(period: str = Query(...), s=Depends(services), user: Pr
 
     farm_telemetry: dict[str, dict] = {}
     for fid in sorted(farms_by_id):
-        obs = s["farm"].list_observations_in_window(fid, None, now - timedelta(days=7), now + timedelta(seconds=1))
-        farm_telemetry[fid] = build_telemetry_summary(
-            obs,
-            now,
-            stale_seconds=settings.sensor_stale_seconds,
-            offline_seconds=settings.sensor_offline_seconds,
-        )
+        farm_telemetry[fid] = _cached_telemetry_summary(s["db"], s["farm"], fid, None, now)
 
     planting_cards: list[dict] = []
     grouped_farms: dict[str, dict] = {
@@ -486,7 +507,7 @@ def coordinator_overview(period: str = Query(...), s=Depends(services), user: Pr
     for m in members_raw:
         mid = m["member_id"]
         mname = m.get("name", mid)
-        pkg = m.get("package_name", "Paket Pilih" if m["eligible"] else "Paket Reguler")
+        pkg = m.get("package_name", "Paket Custom" if m["eligible"] else "Paket Reguler")
         sel = next((x for x in selections_list if x["member_id"] == mid), None)
         req_items = [
             {
@@ -562,7 +583,7 @@ def coordinator_overview(period: str = Query(...), s=Depends(services), user: Pr
             {
                 "member_id": m["member_id"],
                 "name": m.get("name", m["member_id"]),
-                "package_name": m.get("package_name", "Paket Pilih" if m["eligible"] else "Paket Reguler"),
+                "package_name": m.get("package_name", "Paket Custom" if m["eligible"] else "Paket Reguler"),
                 "eligible": bool(m["eligible"]),
                 "quota_kg": float(m.get("quota_kg", 0.0)),
             }
@@ -581,13 +602,7 @@ def farmer_overview(period: str = Query(...), s=Depends(services), user: Princip
     plantings = [p for p in s["farm"].list_active_plantings() if p["farm_id"] in user.farm_ids]
     farm_telemetry: dict[str, dict] = {}
     for fid in sorted(farms_by_id):
-        obs = s["farm"].list_observations_in_window(fid, None, now - timedelta(days=7), now + timedelta(seconds=1))
-        farm_telemetry[fid] = build_telemetry_summary(
-            obs,
-            now,
-            stale_seconds=settings.sensor_stale_seconds,
-            offline_seconds=settings.sensor_offline_seconds,
-        )
+        farm_telemetry[fid] = _cached_telemetry_summary(s["db"], s["farm"], fid, None, now)
     items: list[dict] = []
     grouped: dict[str, dict] = {
         fid: {"farm": farms_by_id[fid], "telemetry": farm_telemetry[fid], "plantings": []}
@@ -630,10 +645,12 @@ def member_overview(period: str = Query(...), s=Depends(services), user: Princip
     member = s["farm"].get_member(user.member_id) or {
         "member_id": user.member_id,
         "name": user.name,
-        "package_name": "Paket Pilih" if user.can_select else "Paket Reguler",
+        "package_name": "Paket Custom" if user.can_select else "Paket Reguler",
         "eligible": user.can_select,
         "quota_kg": 2.0 if user.can_select else 0.0,
     }
+    eff_pkg = s["member"].effective_package(member, period)
+    next_sub = s["member"].get_next_period_subscription(user.member_id, period)
     availability = s["member"].availability(period, user)["items"]
     own_selections = [r.payload for r in list_records(s["db"], "MemberSelection", period=period, owner_id=user.member_id)]
     all_own_selections = [r.payload for r in list_records(s["db"], "MemberSelection", owner_id=user.member_id)]
@@ -671,7 +688,7 @@ def member_overview(period: str = Query(...), s=Depends(services), user: Princip
         | {x["period"] for x in all_own_adjustments if x.get("period")},
         reverse=True,
     )
-    pkg_name = member.get("package_name", "Paket Pilih" if member.get("eligible") else "Paket Reguler")
+    pkg_name = member.get("package_name", "Paket Custom" if member.get("eligible") else "Paket Reguler")
     packages: list[dict] = []
     for p_str in package_periods:
         p_avls = s["member"].availability(p_str, user)["items"]
@@ -729,10 +746,11 @@ def member_overview(period: str = Query(...), s=Depends(services), user: Princip
         "member": {
             "member_id": member["member_id"],
             "name": member.get("name", user.name),
-            "package_name": pkg_name,
-            "eligible": bool(member.get("eligible", user.can_select)),
-            "quota_kg": float(member.get("quota_kg", 0.0)),
+            "package_name": eff_pkg["package_name"],
+            "eligible": bool(eff_pkg["eligible"]),
+            "quota_kg": float(eff_pkg["quota_kg"]),
         },
+        "next_period_subscription": next_sub,
         "availability": availability,
         "selection": own_selections[0] if own_selections else None,
         "updates": updates_list,
@@ -744,3 +762,12 @@ def member_overview(period: str = Query(...), s=Depends(services), user: Princip
             "feedback": all_own_feedback,
         },
     }
+
+
+@router.post("/member/subscription", status_code=200)
+def schedule_member_subscription(
+    body: SubscriptionChangeIn,
+    s=Depends(services),
+    user: Principal = Depends(require_role("MEMBER")),
+):
+    return s["member"].schedule_subscription_change(body.model_dump(), user)

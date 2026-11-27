@@ -45,7 +45,7 @@ def test_username_password_login_issues_opaque_cookie_and_profile(monkeypatch, t
             "user_id": "USR-FARMER",
             "username": "farmer",
             "role": "FARMER",
-            "name": "Petani mitra",
+            "name": "Faiz Santoso",
             "farm_ids": ["FARM-01"],
             "member_id": None,
             "can_select": False,
