@@ -42,6 +42,12 @@ export function Symbol({ name }: { name: SymbolName }) {
   return <WebIcon aria-hidden="true" focusable="false" className="symbol" strokeWidth={1.75} />
 }
 
+export function WhatsAppIcon() {
+  return <svg className="symbol" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="currentColor">
+    <path d="M12.04 2a9.9 9.9 0 0 0-8.48 15.01L2 22l5.13-1.52A9.92 9.92 0 1 0 12.04 2Zm5.77 14.07c-.24.68-1.42 1.3-1.95 1.37-.5.07-1.13.1-1.82-.12-.42-.13-.96-.31-1.65-.61-2.9-1.25-4.79-4.18-4.94-4.37-.14-.19-1.18-1.57-1.18-3s.75-2.13 1.02-2.42c.27-.29.59-.36.79-.36h.57c.18 0 .43-.07.67.51.25.59.84 2.05.91 2.2.07.15.12.33.02.52-.1.19-.15.31-.29.48-.15.17-.31.38-.44.51-.14.15-.3.31-.13.6.17.29.75 1.24 1.62 2.01 1.12 1 2.06 1.31 2.35 1.46.29.14.46.12.63-.07.17-.2.72-.84.91-1.13.19-.29.38-.24.64-.14.26.1 1.67.79 1.96.93.29.15.48.22.55.34.07.12.07.7-.17 1.38Z" />
+  </svg>
+}
+
 export function Button({ icon, variant = 'primary', className = '', children, ...props }:
   ButtonHTMLAttributes<HTMLButtonElement> & { icon?: SymbolName; variant?: 'primary' | 'secondary' | 'text' }) {
   return <button type="button" {...props} className={`button button--${variant} ${className}`}>

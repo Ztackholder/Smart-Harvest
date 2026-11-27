@@ -748,6 +748,88 @@
         }
       }
     },
+    "/api/v1/allocations/smart-plan": {
+      "post": {
+        "summary": "Smart Allocation Plan",
+        "operationId": "smart_allocation_plan_api_v1_allocations_smart_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartPlanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/allocations/apply": {
+      "post": {
+        "summary": "Apply Smart Allocation",
+        "operationId": "apply_smart_allocation_api_v1_allocations_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartApplyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ]
+      }
+    },
     "/api/v1/actual-harvests": {
       "post": {
         "summary": "Actual",
@@ -2275,6 +2357,80 @@
           "quantity_kg"
         ],
         "title": "SelectionItem"
+      },
+      "SmartApplyIn": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SmartApplyItemIn"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "period",
+          "reason",
+          "items"
+        ],
+        "title": "SmartApplyIn"
+      },
+      "SmartApplyItemIn": {
+        "properties": {
+          "availability_id": {
+            "type": "string",
+            "title": "Availability Id"
+          },
+          "approved_quantity_kg": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Approved Quantity Kg"
+          },
+          "member_allocations": {
+            "items": {
+              "$ref": "#/components/schemas/MemberAllocation"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Member Allocations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "availability_id",
+          "approved_quantity_kg",
+          "member_allocations"
+        ],
+        "title": "SmartApplyItemIn"
+      },
+      "SmartPlanIn": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "title": "Period"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "period"
+        ],
+        "title": "SmartPlanIn"
       },
       "SubscriptionChangeIn": {
         "properties": {

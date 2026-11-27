@@ -1,186 +1,155 @@
 # SmartHarvest
 
-SmartHarvest adalah platform integrasi data pertanian dan prediksi ketersediaan panen yang dirancang untuk mendukung layanan *Community Supported Agriculture* (CSA) Tani Sauyunan pada Seni Tani Bandung.
+**Sistem Informasi Pertanian Prediktif Berbasis Layanan untuk CSA Tani Sauyunan**
 
-Proyek ini dikembangkan sebagai bagian dari Tugas Besar II3120 Layanan Sistem dan Teknologi Informasi, Kelompok 9 (K-01), Institut Teknologi Bandung, 2026.
-
-## Latar Belakang
-
-Ketidaksesuaian antara estimasi pasokan petani dan hasil panen aktual dapat mengganggu perencanaan serta pemenuhan paket sayuran mingguan anggota CSA. SmartHarvest dirancang untuk mengintegrasikan data pertanian dari berbagai sumber, menghasilkan prediksi kuantitas panen menggunakan AI, dan membantu pengelola Seni Tani mengantisipasi risiko kekurangan pasokan.
+SmartHarvest mendigitalisasi operasional *Community Supported Agriculture* (CSA) Tani Sauyunan / Seni Tani Bandung (II3120 Layanan Sistem Teknologi Informasi, Kelompok 9 K-01 ITB 2026). Platform ini mengintegrasikan telemetri sensor IoT, prediksi hasil panen berbasis *machine learning*, serta manajemen penawaran dan alokasi paket sayuran mingguan dalam satu alur kerja berbasis layanan.
 
 ## Fitur Utama
 
-- Pengumpulan data pertanian melalui input manual, CSV, dan perangkat IoT.
-- Validasi, normalisasi, dan penyimpanan data pertanian.
-- Prediksi kuantitas hasil panen menggunakan model AI.
-- Penilaian risiko kekurangan pasokan berdasarkan prediksi dan kebutuhan.
-- Dashboard koordinator untuk meninjau prediksi, menyetujui ketersediaan, dan menyesuaikan alokasi.
-- Portal anggota CSA untuk melihat ketersediaan, memilih sayuran sesuai ketentuan paket, mengakses pembaruan alokasi, dan memberikan umpan balik.
-- Pencatatan hasil panen aktual untuk evaluasi.
+- **Monitoring Lahan & IoT**: ingest pembacaan sensor lingkungan melalui MQTT (`ESP32` + `BME280` + `HW-390`), input manual, maupun impor CSV.
+- **Prediksi Panen (AI)**: estimasi hasil panen berbasis model *machine learning* (`scikit-learn`) yang ditampilkan berdampingan dengan perkiraan petani untuk evaluasi akurasi.
+- **Manajemen Panen & Smart Allocation**: pencatatan perkiraan panen, penawaran mingguan, rekomendasi alokasi otomatis (*Smart Allocation*) dengan peringatan kekurangan stok, penyesuaian paket per anggota, serta pencatatan realisasi panen.
+- **Portal Anggota CSA**: dukungan **Paket Custom** (pilih preferensi sayuran mingguan) dan **Paket Reguler** (paket kurasi koordinator), perpindahan paket untuk periode berikutnya, status pengiriman & konfirmasi terima paket, serta ulasan paket.
 
-## Arsitektur Sistem
+## Arsitektur Layanan (SOA)
 
-SmartHarvest menggunakan pendekatan *Service-Oriented Architecture* (SOA) dengan lima layanan logis yang dirancang berdasarkan SoaML pada Deliverable 2. Implementasi awal direncanakan menggunakan satu backend modular dengan REST API sebagai antarmuka integrasi.
+Backend dibangun sebagai satu aplikasi FastAPI modular yang mengimplementasikan 5 layanan logis sesuai model SoaML dengan kontrak API terdokumentasi di OpenAPI (`/api/v1`).
 
-| ID | Layanan | Tanggung Jawab |
+| ID | Layanan | Tanggung Jawab Utama |
 | --- | --- | --- |
-| SVC-01 | Farm Data Integration Service | Menerima, memvalidasi, dan menormalisasi data pertanian. |
-| SVC-02 | Farm Record Service | Mengelola data historis pertanian dan hasil panen aktual. |
-| SVC-03 | Harvest Prediction Service | Menghasilkan dan menyediakan prediksi kuantitas panen. |
-| SVC-04 | Supply Coordination Service | Menilai risiko pasokan serta mendukung persetujuan ketersediaan dan penyesuaian alokasi. |
-| SVC-05 | Member Information Service | Menyediakan informasi ketersediaan, pemilihan sayuran, pembaruan alokasi, dan umpan balik anggota. |
+| `SVC-01` | **Monitoring & IoT Service** | Ingest data sensor (MQTT/manual/CSV) dan ringkasan kondisi lahan |
+| `SVC-02` | **AI Harvest Prediction Service** | Inferensi prediksi hasil panen berbasis data lahan & komoditas |
+| `SVC-03` | **Harvest & Offering Management Service** | Perkiraan panen petani, daftar penawaran mingguan, dan realisasi panen |
+| `SVC-04` | **Member & Subscription Management Service** | Profil anggota, tier paket (`Paket Custom` / `Paket Reguler`), preferensi mingguan, dan pergantian paket periode berikutnya |
+| `SVC-05` | **Allocation & Delivery Management Service** | *Smart Allocation*, jadwal distribusi, konfirmasi penerimaan, ulasan, dan notifikasi |
 
-Model AI menghasilkan prediksi kuantitas panen dalam kilogram. Penilaian risiko dilakukan melalui aturan bisnis pada backend, sedangkan keputusan persetujuan ketersediaan dan penyesuaian alokasi tetap berada pada koordinator Seni Tani.
+## Peran Pengguna
 
-## Pengguna Sistem
-
-| Role | Deskripsi |
+| Peran | Deskripsi |
 | --- | --- |
-| `FARMER` | Petani mitra yang mengirimkan observasi pertanian dan estimasi panen. |
-| `COORDINATOR` | Pengelola Seni Tani yang meninjau prediksi, mengoordinasikan pasokan, dan mencatat hasil panen aktual. |
-| `MEMBER` | Anggota CSA yang mengakses informasi, memilih sayuran sesuai ketentuan paket, dan memberikan umpan balik. |
+| `FARMER` | Petani yang memantau kondisi lahan/IoT, menginput perkiraan panen, dan mencatat realisasi panen. |
+| `COORDINATOR` | Koordinator CSA yang mengelola penawaran mingguan, menjalankan *Smart Allocation*, mengatur paket anggota, dan memantau distribusi. |
+| `MEMBER` | Anggota CSA (**Paket Custom** atau **Paket Reguler**) yang mengatur preferensi/paket periode berikutnya, melacak pengiriman, mengonfirmasi penerimaan, dan memberi ulasan. |
+
+## Tech Stack
+
+| Layer | Teknologi |
+| --- | --- |
+| Frontend | React, TypeScript, Vite |
+| Backend | Python, FastAPI |
+| Database | PostgreSQL, SQLAlchemy, Alembic |
+| Machine Learning | scikit-learn, Joblib, Pandas, NumPy |
+| IoT & Broker | ESP32, BME280, HW-390, MQTT (Mosquitto / HiveMQ Cloud) |
+| Testing & Deployment | Pytest, Docker Compose, Nginx, Cloudflare Tunnel (opsional) |
 
 ## Struktur Repository
 
-Repository menggunakan pendekatan monorepo. Berikut struktur awal yang direncanakan:
-
 ```text
-SmartHarvest/
-├── backend/          # REST API, business logic, dan database
-├── frontend/         # Antarmuka pengguna SmartHarvest
-├── ai/               # Preprocessing, training, evaluasi, dan inferensi AI
-├── datasets/         # Dataset, pengolahan data, dan dokumentasi sumber
-├── iot/              # Firmware perangkat IoT dan simulator
-├── docs/             # Spesifikasi, kontrak integrasi, dan referensi proyek
-├── README.md         # Dokumentasi utama repository
-├── .env.example      # Contoh konfigurasi environment
-└── .gitignore        # Konfigurasi file yang diabaikan Git
+Smart-Harvest/
+├── ai/                  # Notebook, eksperimen, dan artefak model ML
+├── backend/             # Aplikasi FastAPI modular (SVC-01..SVC-05), Alembic, seed & tests
+├── docs/                # Kontrak API, OpenAPI spec, SoaML traceability, MQTT & tunnel docs
+├── frontend/            # Aplikasi web React + TypeScript + Vite
+├── infra/               # Konfigurasi Nginx dan broker MQTT lokal
+├── iot/                 # Firmware ESP32 & utilitas sensor
+├── docker-compose.yml   # Orkestrasi db, migrate, api, web, local-mqtt, tunnel
+└── .env.example         # Template variabel environment
 ```
 
-## Technology Stack
+## Cara Menjalankan
 
-Berikut rencana teknologi awal yang akan dikonfirmasi sebelum implementasi.
+### Prasyarat
 
-| Komponen | Teknologi yang Direncanakan |
-| --- | --- |
-| Frontend | React, TypeScript, Vite, Tailwind CSS |
-| Backend | Python, FastAPI |
-| Database | PostgreSQL, SQLAlchemy, Alembic |
-| AI | scikit-learn, RandomForestRegressor, Joblib |
-| Data Processing | Pandas, NumPy |
-| IoT | ESP32, DHT11/DHT22, HTTP REST API |
-| Testing | Pytest |
-| Deployment | Docker Compose |
+- **Docker & Docker Compose** (rekomendasi untuk menjalankan seluruh stack), atau
+- **Python 3.11+**, **Node.js 20+**, dan **PostgreSQL** (untuk pengembangan lokal tanpa Docker).
 
-## Pembagian Pengembangan
+### 1. Menjalankan dengan Docker Compose (Rekomendasi)
 
-| Workstream | Direktori | Tanggung Jawab |
-| --- | --- | --- |
-| Backend | `backend/` | Implementasi layanan, REST API, database, autentikasi, dan otorisasi. |
-| Frontend | `frontend/` | Pengembangan antarmuka pengguna dan integrasi REST API. |
-| AI Modelling | `ai/` | Pengembangan, evaluasi, dan integrasi model prediksi. |
-| Dataset | `datasets/` | Pengumpulan, pembersihan, standardisasi, dan dokumentasi dataset. |
-| IoT | `iot/` | Pengambilan data sensor dan integrasi dengan backend. |
+1. Salin template environment dan sesuaikan kredensial serta akun bootstrap di `.env` (jangan pernah commit `.env`):
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+   *(Di Linux/macOS gunakan `cp .env.example .env`)*
+2. Bangun dan jalankan seluruh layanan (`db`, `migrate`, `api`, `web`):
+   ```bash
+   docker compose --env-file .env up -d --build
+   ```
+3. Akses aplikasi web di `http://127.0.0.1:8080` (atau sesuai `WEB_PORT` di `.env`) dan dokumentasi OpenAPI di `http://127.0.0.1:8080/docs`.
 
-Setiap workstream dapat dikembangkan secara paralel berdasarkan kontrak integrasi yang disepakati bersama.
+### 2. Seed & Reset Data Demo
 
-## Getting Started
+Jalankan perintah berikut untuk mengisi atau mereset data demo:
 
-Clone repository SmartHarvest melalui GitHub, kemudian masuk ke direktori repository hasil clone.
+- **Mode operasional (default):**
+  ```bash
+  docker compose --env-file .env exec api python -m app.seed_demo --mode operational --reset-demo
+  ```
+- **Mode walkthrough:**
+  ```bash
+  docker compose --env-file .env exec api python -m app.seed_demo --mode walkthrough --reset-demo
+  ```
 
-Pada tahap awal, repository masih berfokus pada penyiapan struktur proyek, dokumentasi, dan kontrak integrasi. Instruksi instalasi dependensi, konfigurasi environment, menjalankan aplikasi, melatih model, serta menjalankan pengujian akan ditambahkan setelah komponen terkait diinisialisasi.
+> Flag `--reset-demo` mereset data operasional demo tanpa menghapus akun pengguna maupun data telemetri MQTT live.
 
-Jangan menyimpan kredensial, API token, atau file `.env` berisi rahasia ke repository. Gunakan `.env.example` untuk mendokumentasikan variabel konfigurasi yang diperlukan.
+### 3. Pengembangan Lokal (Tanpa Docker)
 
-## Status Pengembangan
+Pastikan PostgreSQL berjalan dan variabel database di `.env` sudah sesuai, lalu jalankan backend dan frontend di terminal terpisah:
 
-- [x] Perancangan bisnis dan inovasi layanan (Deliverable 1)
-- [x] Perancangan BPMN, SoaML, REST API, dan rencana prototipe (Deliverable 2)
-- [ ] Setup repository dan kontrak integrasi
-- [ ] Pengumpulan dan pengolahan dataset
-- [ ] Pengembangan backend
-- [ ] Pengembangan frontend
-- [ ] Pengembangan model AI
-- [ ] Implementasi IoT
-- [ ] Integrasi dan pengujian end-to-end (Deliverable 3)
+- **Backend:**
+  ```bash
+  cd backend
+  python -m venv .venv
+  # Aktifkan venv (.venv\Scripts\Activate.ps1 di Windows atau source .venv/bin/activate di Linux/macOS)
+  pip install -r requirements.txt
+  alembic upgrade head
+  uvicorn app.main:app --reload --port 8000
+  ```
+- **Frontend:**
+  ```bash
+  cd frontend
+  npm ci
+  npm run dev
+  ```
+  Server Vite berjalan di `http://localhost:5173` dan meneruskan request `/api` ke `http://127.0.0.1:8000`.
 
-Prototipe ditargetkan untuk mendemonstrasikan satu periode layanan dengan cakupan 1–2 kebun dan 1–2 komoditas. Penggunaan data sintetis atau simulator IoT harus diberi label secara eksplisit. Hasil demonstrasi dengan data sintetis belum membuktikan akurasi model pada kondisi pertanian nyata.
+### 4. MQTT & Cloudflare Tunnel (Opsional)
+
+- **Broker MQTT lokal:**
+  ```bash
+  docker compose --env-file .env --profile local-mqtt up -d
+  ```
+  Lihat kontrak topik & payload di [`docs/mqtt-contract.md`](docs/mqtt-contract.md).
+- **Cloudflare Tunnel:**
+  ```bash
+  docker compose --env-file .env --profile tunnel up -d
+  ```
+  Lihat panduan konfigurasi di [`docs/cloudflare-tunnel.md`](docs/cloudflare-tunnel.md).
+
+### 5. Menjalankan Pengujian
+
+- **Backend:**
+  ```bash
+  cd backend
+  pytest
+  ```
+- **Frontend:**
+  ```bash
+  cd frontend
+  npm test
+  npm run build
+  ```
+
+## Dokumentasi
+
+- [`docs/api-contract.md`](docs/api-contract.md) — Daftar kontrak REST API (`/api/v1`)
+- [`docs/soa-traceability.md`](docs/soa-traceability.md) — Pemetaan layanan SoaML ke endpoint backend
+- [`docs/openapi.json`](docs/openapi.json) — Spesifikasi OpenAPI
+- [`docs/mqtt-contract.md`](docs/mqtt-contract.md) — Kontrak topik & payload IoT MQTT
+- [`docs/cloudflare-tunnel.md`](docs/cloudflare-tunnel.md) — Konfigurasi Cloudflare Tunnel
+- [`docs/security-review.md`](docs/security-review.md) — Catatan tinjauan keamanan
 
 ## Kontributor
 
-Kelompok 9 (K-01) | II3120 Layanan Sistem dan Teknologi Informasi, Institut Teknologi Bandung, 2026.
+**Kelompok 9 — Kelas 01 (K-01)** | II3120 Layanan Sistem Teknologi Informasi, Institut Teknologi Bandung, 2026.
 
-## Implementasi D3: backend, frontend, dan deployment lokal
-
-Backend menggunakan satu aplikasi FastAPI modular yang mengimplementasikan lima layanan logis SoaML. API-01 sampai API-12 berada di prefix `/api/v1`; dokumentasi kontrak ada di [`docs/api-contract.md`](docs/api-contract.md), traceability di [`docs/soa-traceability.md`](docs/soa-traceability.md), dan OpenAPI di [`docs/openapi.json`](docs/openapi.json). Data sintetik dan hasil model harus tetap diberi label.
-
-### Menjalankan demo lokal dengan Docker Compose
-
-1. Buat konfigurasi lokal dan ganti nilai rahasia untuk lingkungan Anda:
-
-```powershell
-Copy-Item .env.example .env
-Copy-Item frontend/.env.example frontend/.env.local
-```
-
-2. Jalankan dari root repository:
-
-```powershell
-docker compose up --build
-```
-
-Buka `http://127.0.0.1:8080`. Nginx menyajikan frontend dan meneruskan `/api/v1/` ke backend. API, PostgreSQL, broker lokal, dan worker tidak dipublikasikan ke port host. Migrasi Alembic berjalan sebelum API siap. Jangan gunakan nilai contoh untuk akses publik.
-
-Untuk backend langsung saat pengembangan, install dependensi dengan `python -m pip install -r backend/requirements.txt`, siapkan PostgreSQL atau SQLite khusus development, atur `DATABASE_URL` ke database development tersebut, lalu jalankan `python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000`. Untuk frontend Vite, `cd frontend; npm ci; npm run dev`; atur `VITE_API_BASE_URL=/api/v1` dan `API_PROXY_TARGET=http://127.0.0.1:8000` pada `.env.local`.
-
-### Kredensial demo dan role
-
-Login menggunakan username dan password. Bootstrap lokal membuat empat akun (`farmer`, `coordinator`, `member-eligible`, `member-regular`) dengan password acak dari variabel `AUTH_BOOTSTRAP_*` di file `.env` yang tidak dilacak Git. Password hanya dibaca saat akun pertama kali dibuat; ubah password sesudah login melalui menu Akun. Password disimpan sebagai hash Argon2id; browser menerima cookie sesi `HttpOnly`, `SameSite=Lax`, dan `Secure` saat production. Jangan kirim nilai `.env` ke chat atau commit. Login tidak mengizinkan pilihan role; role dan scope ditentukan di server. Farm demo adalah `FARM-01`, crop `SPINACH`, periode seed `2026-W48`. Akun anggota eligible adalah `MBR-001`, sedangkan paket reguler adalah `MBR-002`.
-
-### MQTT lokal dan HiveMQ yang sudah ada
-
-MQTT ingestion mati secara default. Untuk simulator terisolasi, isi `.env` dengan `MQTT_ENABLED=true`, `MQTT_HOST=mqtt`, `MQTT_FARM_ID=FARM-01`, `MQTT_DEVICE_ID=SYN-ESP32-01`, dan `MQTT_SOURCE=simulated_iot`, lalu jalankan `docker compose --profile local-mqtt up --build`. Kirim fixture hanya ke broker lokal:
-
-```powershell
-docker compose exec api python -m backend.app.mqtt_simulator --host mqtt
-```
-
-Jika broker berjalan di jaringan Compose, gunakan `--host mqtt` dari container backend/simulator. Jangan arahkan simulator ke broker publik.
-
-Mode HiveMQ memakai host `broker.hivemq.com`, TCP `1883`, topic persis `tani/sensor/lingkungan`, QoS 0, tanpa kredensial (konfigurasi sesuai teammate). Aktifkan hanya bila diperlukan dengan `MQTT_ENABLED=true`, `MQTT_FARM_ID` dan `MQTT_DEVICE_ID` yang telah dikonfigurasi. Payload BME280 terbaru memiliki `hum`; humidity opsional dan tidak diisi ketika tidak diterima. Firmware terbaru tidak mengirim device/block ID maupun timestamp, sehingga konfigurasi server mengikat topic ke demo farm/device dan backend mencatat waktu terima. Broker publik tidak memverifikasi sumber fisik, tidak terenkripsi, dan tidak menjamin pengiriman. Lihat [`docs/mqtt-contract.md`](docs/mqtt-contract.md).
-
-### Model AI yang ada dan penggantian kemudian
-
-Backend memuat hanya file lokal tepercaya dari `MODEL_PATH` (default image `/app/ai/models/model.joblib`) melalui `ai/src/predict.py`; runtime dipin ke scikit-learn 1.9.1 sesuai metadata model. Artifact saat ini bernama `rf-synthetic-v3`, berasal dari dataset sintetik dan bukan bukti akurasi kebun nyata. Ganti hanya melalui adapter predictor, setelah artifact baru tersedia, kontrak fitur/satuan dan dependensi diverifikasi. Atur path eksplisit, uji route dan konversi kg/m² ke kg total, simpan version/provenance, dan pertahankan respons `PREDICTION_UNAVAILABLE` serta persetujuan manual `MANUAL_ESTIMATE` saat model tidak kompatibel. Jangan latih atau mengganti model pada tugas ini.
-
-### Skenario Demo (`operational` & `walkthrough`)
-
-Untuk mengisi dataset demo (2 kebun: Kebun Ciburial & Kebun Cimenyan, 5 komoditas sayuran, 6 penanaman aktif, 6 anggota CSA, riwayat sensor 7 hari, dan periode evaluasi sebelumnya):
-
-```powershell
-# Skenario operasional (siap jelajah langsung)
-docker compose exec api python -m backend.app.seed --scenario operational --period 2026-W48 --reset-demo
-
-# Skenario walkthrough BPMN interaktif (belum ada persetujuan minggu aktif)
-docker compose exec api python -m backend.app.seed --scenario walkthrough --period 2026-W48 --reset-demo
-```
-
-Flag `--reset-demo` hanya membersihkan data demo dan **tidak** menghapus observasi MQTT `source=iot` maupun akun pengguna.
-
-Ilustrasi sayuran dibuat menggunakan fitur generasi gambar OpenAI (ChatGPT), 26 November 2026, untuk keperluan prototipe SmartHarvest. Ilustrasi bukan dokumentasi hasil panen aktual.
-
-### Pengujian dan status
-
-```powershell
-backend/.venv/Scripts/python.exe -m pytest backend/tests -q -p no:cacheprovider
-cd frontend; npm.cmd run build
-cd ..; docker compose --env-file .env.example config --quiet
-```
-
-Hasil pengujian dan batasan deployment ada di docs/d3-test-results.md serta docs/backend-implementation-status.md. Compose dan tunnel aktif; frontend dan API memakai satu hostname. HiveMQ tersambung, tetapi sensor fisik belum mengirim data pada jendela pemeriksaan. Dataset suite masih membutuhkan generate_dataset.py yang tidak ada di tree.
-
-### Cloudflare Tunnel
-
-Tunnel sudah aktif: satu hostname menyajikan frontend dan meneruskan `/api/v1/` ke backend. Password bootstrap hanya ada pada `.env` lokal yang Git-ignored; ganti masing-masing setelah login dan bagikan secara privat. Periksa status dengan `docker compose --env-file .env --profile tunnel ps`. Rollback akses publik dengan `docker compose --env-file .env --profile tunnel stop tunnel` lalu nonaktifkan hostname route/DNS di Cloudflare. Detail verifikasi ada pada docs/cloudflare-tunnel.md.
-
-Dokumentasi keamanan: [`docs/security-review.md`](docs/security-review.md) dan [`docs/security-threat-model.md`](docs/security-threat-model.md).
+*Ilustrasi sayuran dibuat menggunakan fitur generasi gambar OpenAI (ChatGPT).*

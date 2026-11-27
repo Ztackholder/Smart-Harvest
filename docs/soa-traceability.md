@@ -43,7 +43,7 @@ D3 support reads and the coordinator receipt confirmation operation are listed i
 | REQ-06: package-eligible members select produce | F-08 | BP-06 | SVC-05 `submitMemberSelection` | API-07 | Eligible and ineligible selection test. |
 | REQ-07: record actual harvest and member feedback | F-10, F-11 | BP-08 | SVC-02 `recordActualHarvest`; SVC-05 `submitFeedback` | API-09, API-10 | TEST-07; receipt-gate flow. |
 
-BP-07 field operations (planning, harvest, sorting, packing, delivery and handover) remain manual and out of prototype scope, as D2 states. D2 feature priorities F-13..F-15 remain out of scope (member registration/payment/production identity, automatic allocation substitution, multi-period analysis).
+BP-07 field operations (planning, harvest, sorting, packing, delivery and handover) remain manual and out of prototype scope, as D2 states. D2 feature priorities F-13 and F-15 remain out of scope (member registration/payment/production identity, multi-period analysis), while F-14 (Smart Allocation) is implemented inside `SVC-04` (`POST /api/v1/allocations/smart-plan` and `POST /api/v1/allocations/apply`) with coordinator preview, shortfall notification, and explicit confirmation.
 
 ## Cross-service flow
 

@@ -419,6 +419,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   margin: auto; width: min(26rem, calc(100% - 2rem)); border: 1px solid var(--color-border);
   border-radius: var(--radius-lg); background: var(--color-surface); padding: 0;
 }
+.modal:has(.alloc-modal) { width: min(40rem, calc(100% - 2rem)); }
+.alloc-summary-strip {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem;
+  background: var(--color-soft-green); border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); padding: 0.75rem 0.875rem; align-items: center;
+}
+.alloc-summary-strip strong { display: block; font-size: 1.0625rem; color: var(--color-forest); }
+.alloc-toolbar {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+}
+.alloc-qty-input {
+  width: 5.5rem; min-height: 2.125rem; padding: 0.25rem 0.5rem; text-align: right;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm); font: inherit;
+  background: var(--color-surface);
+}
 .modal::backdrop { background: rgb(15 36 28 / 48%); }
 .modal-body { padding: 1.25rem; display: grid; gap: 0.875rem; }
 .modal-heading { display: flex; justify-content: space-between; align-items: center; }

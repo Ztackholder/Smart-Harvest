@@ -199,28 +199,31 @@ export function FarmerEstimates({ work }: { work: Workspace }) {
   )
   const action = useAction()
   const [saved, setSaved] = useState('')
+  const [selectedScope, setSelectedScope] = useState('')
+  const [draftQty, setDraftQty] = useState('')
   const plantings = query.data?.plantings ?? []
-  const estimates = plantings.flatMap(p => p.estimates)
+  const activeScope = selectedScope || (plantings[0] ? `${plantings[0].farm.farm_id}:${plantings[0].crop.crop_id}` : `${defaultFarm}:${defaultCrop}`)
 
   return <div className="stack">
     {query.error && <Notice tone="error">{query.error} <Button variant="text" onClick={query.reload}>Muat ulang</Button></Notice>}
     <div className="two-col-equal">
-      <Card title="Laporkan estimasi panen">
-        <form className="form" onSubmit={action.submit(async fd => {
+      <Card title="Perbarui estimasi panen">
+        <form className="form" onSubmit={action.submit(async () => {
           setSaved('')
-          const [farm_id, crop_id] = value(fd, 'scope').split(':')
+          const [farm_id, crop_id] = activeScope.split(':')
           const res = await work.api.post('/harvest-estimates', {
             farm_id: farm_id || defaultFarm,
             crop_id: crop_id || defaultCrop,
             harvest_period: work.period,
-            estimated_quantity_kg: number(fd, 'quantity'),
+            estimated_quantity_kg: Number(draftQty),
             recorded_at: new Date().toISOString(),
           })
           setSaved(res.estimate_id)
+          setDraftQty('')
           work.refresh()
         })}>
           <Field label="Kebun & komoditas">
-            <select name="scope" required defaultValue={plantings[0] ? `${plantings[0].farm.farm_id}:${plantings[0].crop.crop_id}` : `${defaultFarm}:${defaultCrop}`}>
+            <select name="scope" required value={activeScope} onChange={e => setSelectedScope(e.target.value)}>
               {plantings.length ? plantings.map(p => (
                 <option key={`${p.farm.farm_id}:${p.crop.crop_id}`} value={`${p.farm.farm_id}:${p.crop.crop_id}`}>
                   {p.farm.name} · {cropName(p.crop.crop_id)}
@@ -228,20 +231,44 @@ export function FarmerEstimates({ work }: { work: Workspace }) {
               )) : <option value={`${defaultFarm}:${defaultCrop}`}>Kebun Demo · Bayam</option>}
             </select>
           </Field>
-          <Field label="Perkiraan hasil panen (kg)" name="quantity" type="number" min={0} step="any" required />
+          <Field label="Perkiraan hasil panen (kg)" name="quantity" type="number" min={0} step="any"
+            value={draftQty} onChange={e => setDraftQty(e.target.value)} required />
           {action.error && <Notice tone="error">{action.error}</Notice>}
-          {saved && <Notice tone="good">Perkiraan panen berhasil disimpan.</Notice>}
+          {saved && <Notice tone="good">Perkiraan panen berhasil diperbarui.</Notice>}
           <Button type="submit" disabled={action.pending}>{action.pending ? 'Menyimpan…' : 'Simpan estimasi'}</Button>
         </form>
       </Card>
 
-      <Card title="Estimasi tercatat">
-        {estimates.length ? <ul className="simple-list">
-          {estimates.map(est => <li key={est.estimate_id}>
-            <div className="row-between"><strong>{cropName(est.crop_id)}</strong><strong className="tabular">{kg(est.estimated_quantity_kg)} kg</strong></div>
-            <span className="muted-meta">{dateTime(est.recorded_at)} · <Chip tone="good">Tercatat</Chip></span>
-          </li>)}
-        </ul> : <Empty>Belum ada estimasi yang dikirim untuk periode ini.</Empty>}
+      <Card title="Estimasi aktif minggu ini">
+        {plantings.length ? <table className="data-table">
+          <thead>
+            <tr>
+              <th>Komoditas</th>
+              <th>Perkiraan</th>
+              <th>Diperbarui</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {plantings.map(p => {
+              const scope = `${p.farm.farm_id}:${p.crop.crop_id}`
+              return <tr key={scope}>
+                <td><strong>{cropName(p.crop.crop_id)}</strong></td>
+                <td className="tabular">{p.latest_estimate ? `${kg(p.latest_estimate.estimated_quantity_kg)} kg` : 'Belum diisi'}</td>
+                <td className="muted-meta">{p.latest_estimate ? dateTime(p.latest_estimate.recorded_at) : '—'}</td>
+                <td>
+                  <Button variant="text" onClick={() => {
+                    setSaved('')
+                    setSelectedScope(scope)
+                    setDraftQty(p.latest_estimate ? String(p.latest_estimate.estimated_quantity_kg) : '')
+                  }}>
+                    Ubah
+                  </Button>
+                </td>
+              </tr>
+            })}
+          </tbody>
+        </table> : <Empty>Belum ada komoditas aktif untuk periode ini.</Empty>}
       </Card>
     </div>
   </div>

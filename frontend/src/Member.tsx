@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { cropImage, cropName, dateTime, kg, periodDates } from './contracts'
-import { Button, Card, Chip, Empty, Field, Modal, Notice, ProgressBar, Symbol, useAction, useResource, value } from './ui'
+import { Button, Card, Chip, Empty, Field, Modal, Notice, ProgressBar, Symbol, WhatsAppIcon, useAction, useResource, value } from './ui'
 import type { Workspace } from './workspace'
 
 function CropThumb({ cropId, large = false }: { cropId: string; large?: boolean }) {
@@ -341,25 +341,49 @@ export function MemberUpdates({ work }: { work: Workspace }) {
     work.onAuthExpired,
   )
   const updates = query.data?.updates ?? []
+  const allocatedItems = (query.data?.availability ?? []).filter(a => (a.own_allocation_kg ?? 0) > 0)
+  const allocatedTotal = allocatedItems.reduce((s, a) => s + (a.own_allocation_kg ?? 0), 0)
 
   return <div className="stack">
     {query.error && <Notice tone="error">{query.error} <Button variant="text" onClick={query.reload}>Muat ulang</Button></Notice>}
-    <Card title="Pembaruan paket" subtitle={periodDates(work.period)}>
+
+    <Card title="Isi paket Anda saat ini" subtitle={periodDates(work.period)}
+      actions={allocatedItems.length > 0 && <Chip tone="good">{kg(allocatedTotal)} kg</Chip>}>
+      {allocatedItems.length ? <ul className="simple-list">
+        {allocatedItems.map(a => (
+          <li key={a.availability_id}>
+            <div className="row-between">
+              <div className="produce-info">
+                <CropThumb cropId={a.crop_id} />
+                <strong>{cropName(a.crop_id)}</strong>
+              </div>
+              <strong className="tabular">{kg(a.own_allocation_kg ?? 0)} kg</strong>
+            </div>
+          </li>
+        ))}
+      </ul> : <Empty>Paket Anda sedang menunggu pembagian oleh pengelola.</Empty>}
+    </Card>
+
+    <Card title="Riwayat perubahan paket" subtitle={periodDates(work.period)}>
       {updates.length ? <ul className="simple-list">
-        {updates.map(row => <li key={`${row.adjustment_id}-${row.availability_id}`}>
-          <div className="row-between">
-            <strong>{row.crop_id ? cropName(row.crop_id) : 'Sayuran'}</strong>
-            <Chip tone={row.removed || row.quantity_kg === 0 ? 'shortage' : 'good'}>
-              {row.removed ? 'Dihapus (0 kg)' : `${kg(row.quantity_kg)} kg`}
-            </Chip>
-          </div>
-          <p>{row.reason}</p>
-          <span className="muted-meta">
-            {row.previous_quantity_kg !== undefined && row.previous_quantity_kg !== null && `Sebelumnya ${kg(row.previous_quantity_kg)} kg · `}
-            {dateTime(row.approved_at)}
-          </span>
-        </li>)}
-      </ul> : <Empty>Belum ada perubahan paket untuk Anda pada periode ini.</Empty>}
+        {updates.map(row => {
+          const hasPrev = row.previous_quantity_kg !== undefined && row.previous_quantity_kg !== null
+          const isRemoved = row.removed || row.quantity_kg === 0
+          return <li key={`${row.adjustment_id}-${row.availability_id}`}>
+            <div className="row-between">
+              <strong>{row.crop_id ? cropName(row.crop_id) : 'Sayuran'}</strong>
+              <Chip tone={isRemoved ? 'shortage' : hasPrev ? 'warn' : 'good'}>
+                {isRemoved ? 'Dihapus (0 kg)' : hasPrev ? `Disesuaikan → ${kg(row.quantity_kg)} kg` : `Disiapkan · ${kg(row.quantity_kg)} kg`}
+              </Chip>
+            </div>
+            <p>{row.reason}</p>
+            <span className="muted-meta">
+              {hasPrev && `${kg(row.previous_quantity_kg ?? 0)} kg → ${kg(row.quantity_kg)} kg · `}
+              {dateTime(row.approved_at)}
+            </span>
+          </li>
+        })}
+      </ul> : <Empty>Belum ada penyesuaian atau pembaruan paket pada periode ini.</Empty>}
     </Card>
   </div>
 }
@@ -435,7 +459,7 @@ export function MemberHistoryFeedback({ work }: { work: Workspace }) {
           <Button variant="text" onClick={() => {
             void navigator.clipboard?.writeText(contactMsg).then(() => setCopiedPeriod(pkg.period)).catch(() => undefined)
           }}>
-            {copiedPeriod === pkg.period ? 'Pesan pengelola disalin' : 'Hubungi pengelola'}
+            <WhatsAppIcon /> {copiedPeriod === pkg.period ? 'Pesan pengelola disalin' : 'Hubungi pengelola'}
           </Button>
           {pkg.receipt_confirmed && !pkg.feedback && !isWriting && (
             <Button onClick={() => setReviewPeriod(pkg.period)}>Beri ulasan</Button>

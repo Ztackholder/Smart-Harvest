@@ -484,3 +484,213 @@ class SupplyCoordinationService:
         )
         audit(self.db, principal.user_id, "adjustAllocation", change["adjustment_id"], {"version": change["version"]})
         return change
+
+    def compute_smart_plan(self, period: str) -> dict:
+        parse_period(period)
+        approvals = self.approved_availability(period)
+        selections = [r.payload for r in list_records(self.db, "MemberSelection", period=period)]
+        members = self.farm_record.list_members() if self.farm_record is not None else [
+            r.payload for r in list_records(self.db, "Member")
+        ]
+        members_by_id = {m["member_id"]: m for m in members}
+        crops = self.farm_record.list_crops() if self.farm_record is not None else [
+            r.payload for r in list_records(self.db, "Crop")
+        ]
+        crop_names = {c["crop_id"]: c.get("name", c["crop_id"]) for c in crops}
+        actuals = [r.payload for r in list_records(self.db, "ActualHarvest", period=period)]
+        actual_by_scope = {(a["farm_id"], a["crop_id"]): a for a in actuals}
+
+        # Map member_id -> {availability_id: requested_kg}
+        req_by_member: dict[str, dict[str, float]] = {}
+        for sel in selections:
+            mid = sel["member_id"]
+            req_by_member.setdefault(mid, {})
+            for it in sel.get("items", []):
+                req_by_member[mid][it["availability_id"]] = float(it["quantity_kg"])
+
+        warnings: list[dict] = []
+        avail_remaining: dict[str, float] = {}
+        alloc_map: dict[str, dict[str, float]] = {}
+        avail_limit: dict[str, float] = {}
+        actual_id_map: dict[str, str | None] = {}
+
+        # Step A: Fulfill Paket Custom requests first (proportionally scaled if actual/approved stock is short)
+        for avl in approvals:
+            aid = avl["availability_id"]
+            act = actual_by_scope.get((avl["farm_id"], avl["crop_id"]))
+            avail_kg = round(float(act["actual_quantity_kg"]) if act else float(avl["approved_quantity_kg"]), 2)
+            avail_limit[aid] = avail_kg
+            actual_id_map[aid] = act["actual_harvest_id"] if act else None
+            alloc_map[aid] = {}
+
+            reqs: list[tuple[str, float]] = []
+            for m in members:
+                mid = m["member_id"]
+                if m.get("eligible"):
+                    q = req_by_member.get(mid, {}).get(aid, 0.0)
+                    if q > 0:
+                        reqs.append((mid, q))
+
+            req_total = sum(q for _, q in reqs)
+            if req_total <= avail_kg + 1e-6:
+                for mid, q in reqs:
+                    alloc_map[aid][mid] = round(q, 2)
+                avail_remaining[aid] = max(0.0, round(avail_kg - req_total, 2))
+            else:
+                ratio = avail_kg / req_total if req_total > 0 else 0.0
+                running = 0.0
+                for idx, (mid, q) in enumerate(reqs):
+                    if idx == len(reqs) - 1:
+                        assigned = max(0.0, round(avail_kg - running, 2))
+                    else:
+                        assigned = round(q * ratio, 2)
+                    running += assigned
+                    if assigned > 0:
+                        alloc_map[aid][mid] = assigned
+                    shortfall = round(q - assigned, 2)
+                    if shortfall > 0.01:
+                        mname = members_by_id.get(mid, {}).get("name", mid)
+                        cname = crop_names.get(avl["crop_id"], avl["crop_id"])
+                        warnings.append(
+                            {
+                                "member_id": mid,
+                                "member_name": mname,
+                                "package_name": "Paket Custom",
+                                "crop_id": avl["crop_id"],
+                                "farm_id": avl["farm_id"],
+                                "requested_kg": round(q, 2),
+                                "allocated_kg": assigned,
+                                "shortfall_kg": shortfall,
+                                "message": f"{mname}: permintaan {cname} {q:g} kg hanya terpenuhi {assigned:g} kg (kurang {shortfall:g} kg).",
+                            }
+                        )
+                avail_remaining[aid] = max(0.0, round(avail_kg - running, 2))
+
+        # Step B: Compose balanced ~2.0 kg weekly baskets for Paket Reguler members from remaining stock
+        regular_target_kg = 2.0
+        for m in members:
+            if m.get("eligible"):
+                continue
+            mid = m["member_id"]
+            mname = m.get("name", mid)
+            needed = regular_target_kg
+            # Prefer up to 1.0 kg per crop first for variety, then top up if still < 2.0 kg
+            for cap in (1.0, regular_target_kg):
+                if needed <= 1e-6:
+                    break
+                for avl in approvals:
+                    if needed <= 1e-6:
+                        break
+                    aid = avl["availability_id"]
+                    rem = avail_remaining.get(aid, 0.0)
+                    if rem <= 1e-6:
+                        continue
+                    cur_for_member = alloc_map[aid].get(mid, 0.0)
+                    room = max(0.0, round(cap - cur_for_member, 2))
+                    take = min(rem, needed, room)
+                    take = round(take, 2)
+                    if take > 0:
+                        alloc_map[aid][mid] = round(cur_for_member + take, 2)
+                        avail_remaining[aid] = max(0.0, round(rem - take, 2))
+                        needed = max(0.0, round(needed - take, 2))
+            if needed > 0.01:
+                got = round(regular_target_kg - needed, 2)
+                warnings.append(
+                    {
+                        "member_id": mid,
+                        "member_name": mname,
+                        "package_name": "Paket Reguler",
+                        "crop_id": None,
+                        "farm_id": None,
+                        "requested_kg": regular_target_kg,
+                        "allocated_kg": got,
+                        "shortfall_kg": round(needed, 2),
+                        "message": f"{mname}: paket reguler target {regular_target_kg:g} kg hanya terpenuhi {got:g} kg karena stok terbatas (kurang {needed:g} kg).",
+                    }
+                )
+
+        items: list[dict] = []
+        for avl in approvals:
+            aid = avl["availability_id"]
+            member_allocs = [
+                {"member_id": mid, "quantity_kg": qty}
+                for mid, qty in alloc_map[aid].items()
+                if qty > 0
+            ]
+            items.append(
+                {
+                    "availability_id": aid,
+                    "farm_id": avl["farm_id"],
+                    "crop_id": avl["crop_id"],
+                    "approved_quantity_kg": avail_limit[aid],
+                    "actual_harvest_id": actual_id_map[aid],
+                    "member_allocations": member_allocs,
+                }
+            )
+
+        member_packages: list[dict] = []
+        for m in members:
+            mid = m["member_id"]
+            pkg_items = []
+            req_total = round(sum(req_by_member.get(mid, {}).values()), 2)
+            alloc_total = 0.0
+            for avl in approvals:
+                aid = avl["availability_id"]
+                qty = alloc_map[aid].get(mid, 0.0)
+                req_q = req_by_member.get(mid, {}).get(aid, 0.0)
+                if qty > 0 or req_q > 0:
+                    pkg_items.append(
+                        {
+                            "availability_id": aid,
+                            "farm_id": avl["farm_id"],
+                            "crop_id": avl["crop_id"],
+                            "requested_kg": round(req_q, 2),
+                            "allocated_kg": round(qty, 2),
+                        }
+                    )
+                    alloc_total = round(alloc_total + qty, 2)
+            member_packages.append(
+                {
+                    "member_id": mid,
+                    "name": m.get("name", mid),
+                    "package_name": m.get("package_name", "Paket Custom" if m.get("eligible") else "Paket Reguler"),
+                    "eligible": bool(m.get("eligible")),
+                    "requested_total_kg": req_total if m.get("eligible") else None,
+                    "allocated_total_kg": alloc_total,
+                    "items": pkg_items,
+                }
+            )
+
+        return {
+            "period": period,
+            "items": items,
+            "member_packages": member_packages,
+            "warnings": warnings,
+            "has_shortfall": len(warnings) > 0,
+        }
+
+    def apply_smart_plan(self, data: dict, principal: Principal) -> dict:
+        if principal.role != "COORDINATOR":
+            error("FORBIDDEN", "Coordinator role required", 403)
+        parse_period(data["period"])
+        actuals = [r.payload for r in list_records(self.db, "ActualHarvest", period=data["period"])]
+        actual_by_scope = {(a["farm_id"], a["crop_id"]): a["actual_harvest_id"] for a in actuals}
+        applied: list[dict] = []
+        for item in data["items"]:
+            row = record(self.db, "ApprovedAvailability", item["availability_id"])
+            require(row, "AVAILABILITY_NOT_FOUND", "Approved availability was not found")
+            if row.period != data["period"]:
+                error("PERIOD_MISMATCH", "Availability belongs to another period", 422)
+            adj = self.adjust(
+                {
+                    "availability_id": row.id,
+                    "expected_version": row.version,
+                    "approved_quantity_kg": item["approved_quantity_kg"],
+                    "reason": data["reason"],
+                    "actual_harvest_id": actual_by_scope.get((row.farm_id, row.crop_id)),
+                    "member_allocations": item["member_allocations"],
+                },
+                principal,
+            )
+            applied.append(adj)
+        return {"period": data["period"], "applied_count": len(applied), "adjustments": applied}

@@ -130,6 +130,32 @@ class AdjustmentIn(StrictModel):
     actual_harvest_id: str | None = None
 
 
+class SmartPlanIn(StrictModel):
+    period: str
+
+    @field_validator("period")
+    @classmethod
+    def check_period(cls, v: str) -> str:
+        return validate_period(v)
+
+
+class SmartApplyItemIn(StrictModel):
+    availability_id: str
+    approved_quantity_kg: float = Field(ge=0, allow_inf_nan=False)
+    member_allocations: list[MemberAllocation] = Field(max_length=200)
+
+
+class SmartApplyIn(StrictModel):
+    period: str
+    reason: str = Field(min_length=1, max_length=1000)
+    items: list[SmartApplyItemIn] = Field(min_length=1, max_length=100)
+
+    @field_validator("period")
+    @classmethod
+    def check_period(cls, v: str) -> str:
+        return validate_period(v)
+
+
 class ActualIn(StrictModel):
     farm_id: str
     crop_id: str

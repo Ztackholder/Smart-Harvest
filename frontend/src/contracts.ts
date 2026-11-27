@@ -393,6 +393,54 @@ export type CoordinatorMemberRow = {
   feedback_submitted: boolean
   lifecycle_status: 'Diterima' | 'Siap didistribusikan' | 'Perlu penyesuaian' | 'Menunggu alokasi' | 'Belum memilih'
 }
+export type AllocationWarning = {
+  member_id: string
+  member_name: string
+  package_name: string
+  crop_id: string | null
+  farm_id: string | null
+  requested_kg: number
+  allocated_kg: number
+  shortfall_kg: number
+  message: string
+}
+export type SmartPlanResult = {
+  period: string
+  items: {
+    availability_id: string
+    farm_id: string
+    crop_id: string
+    approved_quantity_kg: number
+    actual_harvest_id: string | null
+    member_allocations: { member_id: string; quantity_kg: number }[]
+  }[]
+  member_packages: {
+    member_id: string
+    name: string
+    package_name: string
+    eligible: boolean
+    requested_total_kg: number | null
+    allocated_total_kg: number
+    items: {
+      availability_id: string
+      farm_id: string
+      crop_id: string
+      requested_kg: number
+      allocated_kg: number
+    }[]
+  }[]
+  warnings: AllocationWarning[]
+  has_shortfall: boolean
+}
+export type SmartApplyInput = {
+  period: string
+  reason: string
+  items: {
+    availability_id: string
+    approved_quantity_kg: number
+    member_allocations: { member_id: string; quantity_kg: number }[]
+  }[]
+}
 export type CoordinatorOverview = {
   period: string
   available_periods?: string[]
@@ -406,6 +454,7 @@ export type CoordinatorOverview = {
   adjustments: Allocation[]
   receipts: Receipt[]
   feedback: Feedback[]
+  allocation_warnings?: AllocationWarning[]
   members: CatalogMember[]
   member_rows?: CoordinatorMemberRow[]
 }

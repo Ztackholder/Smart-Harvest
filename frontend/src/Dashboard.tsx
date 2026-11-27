@@ -102,12 +102,21 @@ export function Dashboard({ work }: { work: Workspace }) {
       })
     }
   }
-  const attentionFarms = farms.filter(f => f.telemetry.status !== 'online')
+  const summaryFarms = farms
+  const allocationWarnings = data?.allocation_warnings ?? []
 
   return <div className="stack">
     {query.error && <Notice tone="error">
       {query.error} {query.stale && '(menampilkan data terakhir)'} <Button variant="text" onClick={query.reload}>Muat ulang</Button>
     </Notice>}
+
+    {allocationWarnings.length > 0 && <div className="amber-banner">
+      <div>
+        <strong>Perhatian: pembagian paket belum terpenuhi penuh</strong>
+        <p>{allocationWarnings[0].message}{allocationWarnings.length > 1 ? ` (+${allocationWarnings.length - 1} lainnya)` : ''}</p>
+      </div>
+      <Button onClick={() => go('alokasi-realisasi')}>Buka Alokasi & Realisasi ›</Button>
+    </div>}
 
     <div className="kpi-grid">
       <div className="kpi-card">
@@ -183,8 +192,8 @@ export function Dashboard({ work }: { work: Workspace }) {
       </Card>
     </div>
 
-    {attentionFarms.length > 0 && <div className="two-col-equal">
-      {attentionFarms.map(fg => (
+    {summaryFarms.length > 0 && <div className="two-col-equal">
+      {summaryFarms.map(fg => (
         <SensorSummary key={fg.farm.farm_id} compact farmName={fg.farm.name} telemetry={fg.telemetry}
           onViewMonitoring={() => go('pemantauan', { farmId: fg.farm.farm_id, cropId: fg.plantings[0]?.crop.crop_id ?? 'SPINACH' })} />
       ))}

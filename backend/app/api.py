@@ -20,6 +20,8 @@ from .schemas import (
     ReceiptIn,
     RiskIn,
     SelectionIn,
+    SmartApplyIn,
+    SmartPlanIn,
     SubscriptionChangeIn,
 )
 from .services.common import parse_period
@@ -208,6 +210,16 @@ def selection(body: SelectionIn, s=Depends(services), user: Principal = Depends(
 @router.post("/allocation-adjustments", status_code=201)
 def adjust(body: AdjustmentIn, s=Depends(services), user: Principal = Depends(require_role("COORDINATOR"))):
     return s["supply"].adjust(body.model_dump(), user)
+
+
+@router.post("/allocations/smart-plan", status_code=200)
+def smart_allocation_plan(body: SmartPlanIn, s=Depends(services), user: Principal = Depends(require_role("COORDINATOR"))):
+    return s["supply"].compute_smart_plan(body.period)
+
+
+@router.post("/allocations/apply", status_code=201)
+def apply_smart_allocation(body: SmartApplyIn, s=Depends(services), user: Principal = Depends(require_role("COORDINATOR"))):
+    return s["supply"].apply_smart_plan(body.model_dump(), user)
 
 
 @router.post("/actual-harvests", status_code=201)
@@ -565,7 +577,8 @@ def coordinator_overview(period: str = Query(...), s=Depends(services), user: Pr
             }
         )
 
-    demo_mode = any(bool(f.get("synthetic") or f.get("demo_scenario")) for f in farms_by_id.values())
+    allocation_warnings = s["supply"].compute_smart_plan(period)["warnings"] if approvals else []
+    demo_mode = bool(any(bool(f.get("synthetic") or f.get("demo_scenario")) for f in farms_by_id.values()))
     return {
         "period": period,
         "available_periods": _available_periods(s["db"], period),
@@ -579,6 +592,7 @@ def coordinator_overview(period: str = Query(...), s=Depends(services), user: Pr
         "adjustments": adjustments_list,
         "receipts": receipts_list,
         "feedback": feedback_list_rows,
+        "allocation_warnings": allocation_warnings,
         "members": [
             {
                 "member_id": m["member_id"],

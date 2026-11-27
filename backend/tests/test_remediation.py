@@ -436,9 +436,9 @@ def test_revision_seed_scenarios_receipt_gate_and_review_outcome(tmp_path, monke
             db.commit()
 
         ov = client.get("/api/v1/coordinator/overview?period=2026-W48", headers=coord).json()
-        assert len(ov["farms"]) == 2
-        assert len(ov["plantings"]) == 6
-        assert len(ov["member_rows"]) == 6
+        assert len(ov["farms"]) == 1
+        assert len(ov["plantings"]) == 5
+        assert len(ov["member_rows"]) == 2
         assert ov["demo_mode"] is True
         assert "2026-W47" in ov["available_periods"]
 
@@ -451,9 +451,9 @@ def test_revision_seed_scenarios_receipt_gate_and_review_outcome(tmp_path, monke
         assert rcpt_blocked.status_code == 409
         assert rcpt_blocked.json()["error"]["code"] == "ALLOCATION_REQUIRED"
 
-        # MBR-001 sees all 6 approved availability items covering all 5 crops on member overview
+        # MBR-001 sees all 5 approved availability items covering all 5 crops on member overview
         mov = client.get("/api/v1/member/overview?period=2026-W48", headers=member1).json()
-        assert len(mov["availability"]) == 6
+        assert len(mov["availability"]) == 5
         assert len({a["crop_id"] for a in mov["availability"]}) == 5
 
         # Switch to walkthrough scenario safely and test WAITING_FARMER review gate
@@ -534,10 +534,10 @@ def test_b09_farmer_farm_scope_isolation_and_member_packages(tmp_path, monkeypat
             },
         ).status_code == 403
 
-        # Coordinator sees both FARM-01 and FARM-02
+        # Coordinator sees active FARM-01
         c_cat = client.get("/api/v1/catalog", headers=coord).json()
-        assert sorted(f["farm_id"] for f in c_cat["farms"]) == ["FARM-01", "FARM-02"]
-        assert client.get("/api/v1/telemetry/summary?farm_id=FARM-02", headers=coord).status_code == 200
+        assert [f["farm_id"] for f in c_cat["farms"]] == ["FARM-01"]
+        assert client.get("/api/v1/telemetry/summary?farm_id=FARM-01", headers=coord).status_code == 200
 
         # Member sees no farms in catalog, 403 on telemetry, and package-centric history including 2026-W47
         m_cat = client.get("/api/v1/catalog", headers=member1).json()
@@ -562,14 +562,13 @@ def test_v3_identities_offline_farm_and_next_period_subscription(tmp_path, monke
         member1 = _login(client, "member-eligible", "rem-eligible-password-1234")
         member2 = _login(client, "member-regular", "rem-regular-password-12345")
 
-        # V3 names & offline Kebun Cimenyan
+        # V3 names & single Kebun Ciburial farm
         c_ov = client.get("/api/v1/coordinator/overview?period=2026-W48", headers=coord).json()
         names = {m["member_id"]: m["name"] for m in c_ov["member_rows"]}
-        assert names["MBR-001"] == "Nisrina Pratiwi"
-        assert names["MBR-002"] == "Adrian Hidayat"
-        farm2 = next(f for f in c_ov["farms"] if f["farm"]["farm_id"] == "FARM-02")
-        assert farm2["telemetry"]["status"] == "offline"
-        assert any(p["latest_prediction"] is not None for p in farm2["plantings"])
+        assert names == {"MBR-001": "Nisrina Pratiwi", "MBR-002": "Adrian Hidayat"}
+        assert [f["farm"]["farm_id"] for f in c_ov["farms"]] == ["FARM-01"]
+        assert c_ov["farms"][0]["farm"]["name"] == "Kebun Ciburial"
+        assert any(p["latest_prediction"] is not None for p in c_ov["farms"][0]["plantings"])
 
         # Next-period subscription switch preserves 2026-W48 and takes effect in 2026-W49
         sw1 = client.post(
@@ -601,4 +600,77 @@ def test_v3_identities_offline_farm_and_next_period_subscription(tmp_path, monke
         ov2_w49 = client.get("/api/v1/member/overview?period=2026-W49", headers=member2).json()
         assert ov2_w49["member"]["package_name"] == "Paket Custom"
         assert ov2_w49["member"]["eligible"] is True
+
+
+def test_smart_allocation_shortfall_and_apply(tmp_path, monkeypatch):
+    from backend.app.seed import seed_scenario
+
+    _setup_env(monkeypatch, tmp_path, model_enabled=True)
+    monkeypatch.setattr(settings, "model_path", "ai/models/model.joblib")
+
+    with TestClient(app, headers={"host": "localhost"}) as client:
+        with session_factory()() as db:
+            seed_scenario(db, scenario="operational", period="2026-W48", reset_demo=True)
+            db.commit()
+
+        coord = _login(client, "coordinator", "rem-coordinator-password-123")
+        member1 = _login(client, "member-eligible", "rem-eligible-password-1234")
+
+        ov = client.get("/api/v1/coordinator/overview?period=2026-W48", headers=coord).json()
+        spinach_avl = next(a for a in ov["approvals"] if a["crop_id"] == "SPINACH")
+
+        # Nisrina selects 2.0 kg Bayam
+        sel = client.post(
+            "/api/v1/member-selections",
+            headers=member1,
+            json={
+                "period": "2026-W48",
+                "items": [{"availability_id": spinach_avl["availability_id"], "availability_version": spinach_avl["version"], "quantity_kg": 2.0}],
+            },
+        )
+        assert sel.status_code == 201
+
+        # Adriel records actual harvest shortage of 1.2 kg Bayam
+        act = client.post(
+            "/api/v1/actual-harvests",
+            headers=coord,
+            json={
+                "farm_id": "FARM-01",
+                "crop_id": "SPINACH",
+                "period": "2026-W48",
+                "actual_quantity_kg": 1.2,
+                "harvested_at": "2026-11-27T10:00:00Z",
+                "source": "coordinator-confirmed",
+                "confirmation_note": "Panen aktual kurang",
+            },
+        )
+        assert act.status_code == 201
+
+        # Smart plan detects shortfall for Nisrina and composes Adrian's Paket Reguler from remaining crops
+        plan = client.post("/api/v1/allocations/smart-plan", headers=coord, json={"period": "2026-W48"})
+        assert plan.status_code == 200
+        body = plan.json()
+        assert body["has_shortfall"] is True
+        assert any(w["member_id"] == "MBR-001" and w["shortfall_kg"] == 0.8 for w in body["warnings"])
+
+        # Apply smart plan atomically and verify Nisrina receives API-12 update
+        applied = client.post(
+            "/api/v1/allocations/apply",
+            headers=coord,
+            json={
+                "period": "2026-W48",
+                "reason": "Pembagian otomatis sesuai hasil panen aktual",
+                "items": [
+                    {
+                        "availability_id": it["availability_id"],
+                        "approved_quantity_kg": it["approved_quantity_kg"],
+                        "member_allocations": it["member_allocations"],
+                    }
+                    for it in body["items"]
+                ],
+            },
+        )
+        assert applied.status_code == 201
+        updates = client.get("/api/v1/allocation-updates?period=2026-W48", headers=member1).json()["items"]
+        assert any(u["crop_id"] == "SPINACH" and u["quantity_kg"] == 1.2 for u in updates)
 

@@ -28,6 +28,8 @@ import type {
   RiskInput,
   Selection,
   SelectionInput,
+  SmartApplyInput,
+  SmartPlanResult,
   TelemetryHistory,
   TelemetrySummary,
 } from './contracts'
@@ -50,6 +52,8 @@ type Operations = {
     { period: string; target_package: 'Paket Reguler' | 'Paket Custom' },
     { effective_period: string; package_name: string; eligible: boolean; quota_kg: number },
   ]
+  '/allocations/smart-plan': [{ period: string }, SmartPlanResult]
+  '/allocations/apply': [SmartApplyInput, { period: string; applied_count: number; adjustments: Allocation[] }]
 }
 
 function errorMessage(status: number, payload: unknown) {

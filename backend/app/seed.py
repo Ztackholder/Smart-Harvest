@@ -16,7 +16,6 @@ JAKARTA_TZ = timezone(timedelta(hours=7))
 
 DEMO_FARMS = (
     {"farm_id": "FARM-01", "name": "Kebun Ciburial", "farmer_name": "Faiz Santoso", "contact_phone": None},
-    {"farm_id": "FARM-02", "name": "Kebun Cimenyan", "farmer_name": "Pak Asep", "contact_phone": None},
 )
 
 DEMO_CROPS = (
@@ -30,19 +29,14 @@ DEMO_CROPS = (
 DEMO_MEMBERS = (
     ("MBR-001", "Nisrina Pratiwi", "Paket Custom", True, 2.0, 2.0),
     ("MBR-002", "Adrian Hidayat", "Paket Reguler", False, 0.0, 2.0),
-    ("MBR-003", "Sari Wulandari", "Paket Custom", True, 2.0, 2.0),
-    ("MBR-004", "Hendra Wijaya", "Paket Reguler", False, 0.0, 2.0),
-    ("MBR-005", "Dewi Lestari", "Paket Custom", True, 2.0, 2.0),
-    ("MBR-006", "Agus Pratama", "Paket Reguler", False, 0.0, 2.0),
 )
 
 DEMO_PLANTINGS = (
     ("PLANT-FARM01-SPINACH", "FARM-01", "SPINACH", 2.5, 20, 3.2),
-    ("PLANT-FARM01-KANGKUNG", "FARM-01", "KANGKUNG", 2.5, 25, 3.0),
-    ("PLANT-FARM01-LETTUCE", "FARM-01", "LETTUCE", 2.0, 16, 2.2),
-    ("PLANT-FARM02-SPINACH", "FARM-02", "SPINACH", 1.8, 14, 2.0),
-    ("PLANT-FARM02-PAKCHOY", "FARM-02", "PAKCHOY", 2.2, 18, 2.6),
-    ("PLANT-FARM02-MUSTARD", "FARM-02", "MUSTARD_GREENS", 2.5, 20, 3.0),
+    ("PLANT-FARM01-KANGKUNG", "FARM-01", "KANGKUNG", 2.5, 25, 3.5),
+    ("PLANT-FARM01-PAKCHOY", "FARM-01", "PAKCHOY", 2.2, 18, 4.3),
+    ("PLANT-FARM01-LETTUCE", "FARM-01", "LETTUCE", 2.0, 16, 2.8),
+    ("PLANT-FARM01-MUSTARD", "FARM-01", "MUSTARD_GREENS", 2.5, 20, 3.8),
 )
 
 
@@ -84,18 +78,37 @@ def reset_demo_records(db: Session) -> int:
         "Receipt",
         "MemberFeedback",
     }
+    active_farms = {f["farm_id"] for f in DEMO_FARMS}
+    active_members = {m[0] for m in DEMO_MEMBERS}
+    active_plantings = {p[0] for p in DEMO_PLANTINGS}
     rows = db.scalars(select(Record)).all()
     deleted = 0
+    stale_farms: list[Record] = []
     for row in rows:
         if row.kind == "Observation":
-            if row.payload.get("source") == "iot":
-                continue
-            if row.payload.get("demo_scenario") or row.payload.get("demo_fixture"):
+            if row.farm_id not in active_farms or row.payload.get("demo_scenario") or row.payload.get("demo_fixture"):
+                if row.payload.get("source") == "iot" and row.farm_id in active_farms:
+                    continue
                 db.delete(row)
                 deleted += 1
         elif row.kind in resettable_kinds:
             db.delete(row)
             deleted += 1
+        elif row.kind == "Planting" and row.id not in active_plantings:
+            db.delete(row)
+            deleted += 1
+        elif row.kind == "Device" and row.farm_id not in active_farms:
+            db.delete(row)
+            deleted += 1
+        elif row.kind == "Member" and row.id not in active_members:
+            db.delete(row)
+            deleted += 1
+        elif row.kind == "Farm" and row.id not in active_farms:
+            stale_farms.append(row)
+    db.flush()
+    for farm_row in stale_farms:
+        db.delete(farm_row)
+        deleted += 1
     db.flush()
     return deleted
 
@@ -105,8 +118,6 @@ def _seed_telemetry_7d(db: Session, scenario: str, cutoff_utc: datetime) -> None
     configs = (
         # FARM-01: Kebun Ciburial — stable (~26.4C, ~78% RH, ~65% soil), fresh
         ("FARM-01", "SYN-CIBURIAL-01", 26.4, 78.0, 65.0, 926.0, timedelta(minutes=5)),
-        # FARM-02: Kebun Cimenyan — warm/dry concern (~31.2C, ~59% RH, ~23% soil), offline (>2h lag, still <=24h for 7d AI coverage)
-        ("FARM-02", "SYN-CIMENYAN-01", 31.2, 59.0, 23.0, 921.0, timedelta(hours=3)),
     )
     for farm_id, dev_id, base_t, base_h, base_s, base_p, lag in configs:
         end_dt = cutoff_utc - lag
@@ -290,7 +301,6 @@ def seed_scenario(db: Session, scenario: str = "operational", period: str = "202
     for dev_id, fid, trust in (
         ("BLOK-A1", "FARM-01", "public_mqtt_unverified"),
         ("SYN-CIBURIAL-01", "FARM-01", "local_simulator"),
-        ("SYN-CIMENYAN-01", "FARM-02", "local_simulator"),
     ):
         if not record(db, "Device", dev_id):
             save(db, "Device", {"device_id": dev_id, "farm_id": fid, "trust": trust}, id=dev_id, farm_id=fid)
@@ -438,44 +448,30 @@ def seed_scenario(db: Session, scenario: str = "operational", period: str = "202
                         coord,
                     )
 
-        # Existing member selections for MBR-003 (2.0 kg) and MBR-005 (1.75 kg), leaving MBR-001 interactive
+        # Assign regular package allocation to MBR-002 (Adrian Hidayat: 2.0 kg), leaving MBR-001 (Nisrina Pratiwi) interactive
         avls = supply_svc.approved_availability(period)
-        if avls and not list_records(db, "MemberSelection", period=period):
-            for mid, name, qty_a, qty_b in (("MBR-003", "Sari Wulandari", 1.0, 1.0), ("MBR-005", "Dewi Lestari", 1.0, 0.75)):
-                items = [{"availability_id": avls[0]["availability_id"], "availability_version": avls[0]["version"], "quantity_kg": qty_a}]
-                if len(avls) > 1:
-                    items.append({"availability_id": avls[1]["availability_id"], "availability_version": avls[1]["version"], "quantity_kg": qty_b})
-                member_svc.selection({"period": period, "items": items}, Principal(f"USR-{mid}", "MEMBER", name, [], mid, True))
-
-            # Assign regular allocations to MBR-002 (2.0 kg) and MBR-004 (1.5 kg); leave MBR-006 pending
-            if not list_records(db, "AllocationAdjustment", period=period):
+        if avls and not list_records(db, "AllocationAdjustment", period=period):
+            supply_svc.adjust(
+                {
+                    "availability_id": avls[0]["availability_id"],
+                    "expected_version": avls[0]["version"],
+                    "approved_quantity_kg": avls[0]["approved_quantity_kg"],
+                    "reason": "Rencana pembagian awal Paket Reguler",
+                    "member_allocations": [{"member_id": "MBR-002", "quantity_kg": 1.0}],
+                },
+                coord,
+            )
+            if len(avls) > 1:
                 supply_svc.adjust(
                     {
-                        "availability_id": avls[0]["availability_id"],
-                        "expected_version": avls[0]["version"],
-                        "approved_quantity_kg": avls[0]["approved_quantity_kg"],
+                        "availability_id": avls[1]["availability_id"],
+                        "expected_version": avls[1]["version"],
+                        "approved_quantity_kg": avls[1]["approved_quantity_kg"],
                         "reason": "Rencana pembagian awal Paket Reguler",
-                        "member_allocations": [
-                            {"member_id": "MBR-002", "quantity_kg": 1.0},
-                            {"member_id": "MBR-004", "quantity_kg": 0.75},
-                        ],
+                        "member_allocations": [{"member_id": "MBR-002", "quantity_kg": 1.0}],
                     },
                     coord,
                 )
-                if len(avls) > 1:
-                    supply_svc.adjust(
-                        {
-                            "availability_id": avls[1]["availability_id"],
-                            "expected_version": avls[1]["version"],
-                            "approved_quantity_kg": avls[1]["approved_quantity_kg"],
-                            "reason": "Rencana pembagian awal Paket Reguler",
-                            "member_allocations": [
-                                {"member_id": "MBR-002", "quantity_kg": 1.0},
-                                {"member_id": "MBR-004", "quantity_kg": 0.75},
-                            ],
-                        },
-                        coord,
-                    )
 
     return {"scenario": scenario, "period": period, "farms": len(DEMO_FARMS), "plantings": len(DEMO_PLANTINGS), "members": len(DEMO_MEMBERS)}
 
